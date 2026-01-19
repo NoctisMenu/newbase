@@ -1,0 +1,127 @@
+# Config Schema v1
+#
+# Widget Type Syntax:
+# - Simple: widget_type = "checkbox"
+# - With options: widget_type = { widget = "smoothslider", width = 140.0, height = 20.0 }
+#
+# Available widget types:
+# - "checkbox" - Simple boolean checkbox
+# - "toggle" - Toggle switch
+# - "smoothslider" - Animated slider (supports width, height options)
+# - "colorpicker" - Color picker with palette
+# - "combobox" - Dropdown menu (for enum types)
+# - "none" - No widget (internal values)
+#
+# Category Grouping:
+# - Fields are grouped by their metadata.category value
+# - Each category is rendered in its own rectangle with a header
+# - Categories are sorted alphabetically within each section
+# - Empty sections display "No settings available"
+
+version = 1
+
+[sections.aim]
+display_name = "Aim Settings"
+
+[sections.aim.fields.aim_enabled]
+type = "bool"
+widget_type = "checkbox"
+default = false
+public = true
+[sections.aim.fields.aim_enabled.metadata]
+display_name = "Aimbot"
+description = "Enable aimbot assistance"
+category = "General"
+
+[sections.aim.fields.aim_fov]
+type = "float"
+min = 0.0
+max = 15.0
+widget_type = { widget = "smoothslider", width = 140.0, height = 20.0 }
+default = 5.0
+public = true
+[sections.aim.fields.aim_fov.metadata]
+display_name = "Aim FOV"
+description = "Field of view for aim assistance"
+category = "General"
+
+[sections.aim.fields.aim_smoothing]
+type = "float"
+min = 0.0
+max = 1.0
+widget_type = "smoothslider"
+default = 0.0
+public = true
+[sections.aim.fields.aim_smoothing.metadata]
+display_name = "Aim Smoothing"
+tooltip = "Higher = more blatant"
+category = "Humanization"
+
+
+[sections.esp]
+display_name = "ESP Settings"
+[sections.esp.fields.enable_esp]
+type = "bool"
+widget_type = "checkbox"
+default = true
+public = true
+[sections.esp.fields.enable_esp.metadata]
+display_name = "Enable ESP"
+category = "General"
+
+[sections.exploits]
+display_name = "Exploits"
+
+
+[sections.core]
+display_name = "Core Settings"
+
+[sections.core.fields.streamproof]
+type = "bool"
+widget_type = "toggle"
+default = true
+public = true
+[sections.core.fields.streamproof.metadata]
+display_name = "Streamproof"
+description = "Hide from screen recording"
+category = "Security"
+
+[sections.core.fields.discord_presence]
+type = "bool"
+widget_type = "toggle"
+default = true
+public = true
+[sections.core.fields.discord_presence.metadata]
+display_name = "Discord RPC"
+description = "Show Discord Rich Presence"
+category = "Integrations"
+
+# [sections.core.fields.spotify]
+# type = "bool"
+# widget_type = "toggle"
+# default = true
+# public = true
+# [sections.core.fields.spotify.metadata]
+# display_name = "Spotify Widget"
+# description = "Display Spotify now playing widget"
+# category = "Integrations"
+
+[sections.core.fields.accent_color]
+type = "color"
+widget_type = "colorpicker"
+default = "#506883"
+public = true
+[sections.core.fields.accent_color.metadata]
+display_name = "Accent Color"
+description = "UI accent color"
+category = "Appearance"
+
+[sections.core.fields.accent_hex]
+type = "string"
+widget_type = "none"
+default = ""
+public = false
+[sections.core.fields.accent_hex.metadata]
+display_name = "Accent Hex (Internal)"
+description = "Internal hex string storage"
+category = "Internal"
