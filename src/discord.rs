@@ -57,11 +57,11 @@ impl Discord {
                         .state(state.lock().unwrap().as_str())
                         .button(Button {
                             label: "noctismenu.dev".to_string(),
-                            url: crate::LOADER_WEBSITE.to_string(),
+                            url: "https://noctismenu.dev".to_string(),
                         })
                         .assets(ds::activity::Assets::default().large(
-                            "logo".to_owned(),
-                            Some(crate::LOADER_WEBSITE.strip_prefix("https://").unwrap()),
+                            "logo",
+                            Some("noctismenu.dev"),
                         ))
                         .start_timestamp(time_stamp);
                     log::info!(

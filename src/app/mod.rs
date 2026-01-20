@@ -130,12 +130,11 @@ pub enum MenuTab {
 
 impl App {
     pub fn start(
-        pid: u32,
         game_pid: u32,
         game_window: windowing::Window,
         time_remaining: Arc<AtomicI64>,
-        start: Instant,
     ) {
+        let pid = std::process::id();
 
         let mut app = App {
             pid,
@@ -144,13 +143,8 @@ impl App {
             time_remaining,
             ..Default::default()
         };
-        app.aim_button.selected = true;
-        //println!("{:X}",);
-        //std::process::exit(1);
-        app.discord.init();
 
-        //spawn_with_app_arcs!(app, "player thread".to_string(), [], {});
-        log::info!("Time to app start: {} ms", start.elapsed().as_millis());
+        app.discord.init();
         app.spawn_all_threads();
         egui_overlay::start(app)
     }
@@ -182,7 +176,6 @@ impl App {
     where
         F: FnMut() + Send + 'static,
     {
-        log::info!("Spawning new thread:{}", thread_name.to_string());
         if self.join_handles.contains_key(&thread_name.to_string()) {
             log::info!("Thread {} already exists!", thread_name.to_string());
             return Err("A thread already exists with that name!".to_string());
