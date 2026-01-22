@@ -19,7 +19,6 @@ kill_game = []
 
 [dependencies]
 memory = {version = "*", git = "https://github.com/NoctisMenu/memory.git", branch = "leakeddrv"} #mem access
-autherium-loader = { git = "https://github.com/NoctisMenu/autherium.git" } #simple error and loader app
 windowing = { git = "https://github.com/NoctisMenu/windowing.git" } #cross platform window info struct
 windows-strings = "0.5.0"
 
