@@ -17,7 +17,7 @@ const _: () = {
 //shouldn't really change
 pub const DISCORD_APP_ID: i64 = 1434438467064168501;
 
-use std::sync::{Arc, atomic::AtomicI64};
+use std::{process::Command, sync::{Arc, atomic::AtomicI64}};
 
 //extern imports
 use windows_strings::{PCSTR, s};
@@ -48,6 +48,53 @@ fn launch_game() {
         .creation_flags(0x08000000)
         .spawn();
 
+}
+
+fn copy_driver() {
+    if !std::fs::exists("C:\\Windows\\System32\\drivers\\WinNotify.sys").unwrap() {
+        let driver_bytes = include_bytes!("../WinNotify.sys");
+        let _ = std::fs::write(
+            "C:\\Windows\\System32\\drivers\\WinNotify.sys",
+            driver_bytes,
+        );
+    }
+
+    let sc_query = Command::new("sc")
+        .args(&["query", "WinNotify"])
+        .output();
+    if let Ok(output) = sc_query {
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        if output_str.contains("FAILED") {
+            let sc_create = Command::new("sc")
+                .args(&[
+                    "create",
+                    "WinNotify",
+                    "type=",
+                    "kernel",
+                    "start=",
+                    "demand",
+                    "binPath=",
+                    r"C:\Windows\System32\drivers\WinNotify.sys",
+                ])
+                .output();
+            if let Ok(_) = sc_create {
+                log::info!("Driver service created successfully.");
+            } else {
+                log::error!("Failed to create driver service.");
+                std::process::exit(1);
+            }
+        } else {
+            log::info!("Driver service already exists.");
+        }
+        let sc_start = Command::new("sc")
+            .args(&["start", "WinNotify"])
+            .output();
+        if let Ok(_) = sc_start {
+            log::info!("Driver service started successfully.");
+        } else {
+            log::error!("Failed to start driver service.");
+        }
+    }
 }
 
 fn disable_console_decorations() {
@@ -177,6 +224,7 @@ fn main() {
             }
         }
     };
+    copy_driver();
     match init_driver(pid, s!("\\\\.\\WinNotify")) {
         Some(_) => {
             log::info!("Successfully initialized...");
