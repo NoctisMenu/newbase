@@ -4,16 +4,12 @@ use windowing::WindowInfo;
 mod gui;
 mod logic;
 mod overlay;
-//mod signatures;
-mod config;
 pub mod config_system;
-mod humanizer;
 mod macros;
 mod threads;
 
 use crate::{
     Animation, DoubleBuffer, Player,
-    discord::Discord,
     widgets::{MenuButton, SearchBar, Toasts},
 };
 use windows::Win32::Foundation::HWND;
@@ -49,7 +45,6 @@ pub struct App {
     pub device_state: device_query::DeviceState,
     join_handles: HashMap<String, JoinHandle<()>>,
     threads_performance: HashMap<String, Arc<Mutex<Duration>>>,
-    pub discord: Discord,
 
     //menu details
     pub frametime: Duration,
@@ -66,7 +61,6 @@ pub struct App {
     pub exploits_button: MenuButton,
     pub misc_button: MenuButton,
     pub toasts: Toasts,
-    pub search_bar: SearchBar,
 
     //game details
     pub player_buffer: Arc<DoubleBuffer<Player>>,
@@ -90,7 +84,6 @@ impl Default for App {
             exit: false,
             time_remaining: Arc::new(AtomicI64::default()),
             device_state: device_query::DeviceState::new(),
-            discord: Discord::new().unwrap(),
             frametime: Duration::from_secs(1),
             frame_samples: Vec::new(),
             last_fps_update: Instant::now(),
@@ -103,7 +96,6 @@ impl Default for App {
             exploits_button: MenuButton::new(None),
             misc_button: MenuButton::new(None),
             toasts: Toasts::new(),
-            search_bar: config::build_search_bar(),
 
             config_store: Arc::new(parking_lot::RwLock::new(
                 config_system::ConfigStore::load_with_fallback(),
@@ -135,7 +127,6 @@ impl App {
         time_remaining: Arc<AtomicI64>,
     ) {
         let pid = std::process::id();
-
         let mut app = App {
             pid,
             game_pid,
@@ -143,8 +134,6 @@ impl App {
             time_remaining,
             ..Default::default()
         };
-
-        app.discord.init();
         app.spawn_all_threads();
         egui_overlay::start(app)
     }

@@ -3,6 +3,5 @@ impl crate::App {
         self.memory_aimbot();
         self.esp(painter.clone());
         self.exploits();
-        self.discord_rpc();
     }
 }

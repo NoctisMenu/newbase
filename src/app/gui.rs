@@ -228,67 +228,6 @@ impl crate::App {
             .title_bar(false)
             .show(ctx, |ui| {
                 self.visible_animation.update();
-                ui.add_space(15.0);
-                ui.horizontal(|ui| {
-                    ui.add_space(15.0);
-                    let resp = self.search_bar.show(ui);
-                    if let Some(cheat) = resp.1 {
-                        // Highlight the selected field
-                        self.config_store.write().highlight_field(cheat.id.clone());
-
-                        // Extract section name from cheat ID (format: "section.field")
-                        if let Some(section) = cheat.id.split('.').next() {
-                            // Map section name to tab
-                            let target_tab = match section {
-                                "aim" => super::MenuTab::Aim,
-                                "esp" => super::MenuTab::Esp,
-                                "core" => super::MenuTab::Misc,
-                                "exploits" => super::MenuTab::Exploits,
-                                _ => super::MenuTab::Aim, // Default fallback
-                            };
-
-                            // Switch to the target tab
-                            self.tab = target_tab;
-
-                            //TODO: fixme
-                            // Update button selection states
-                            match target_tab {
-                                super::MenuTab::Aim => {
-                                    self.aim_button.set_selected(true);
-                                    self.esp_button.set_selected(false);
-                                    self.misc_button.set_selected(false);
-                                    self.exploits_button.set_selected(false);
-                                }
-                                super::MenuTab::Esp => {
-                                    self.aim_button.set_selected(false);
-                                    self.esp_button.set_selected(true);
-                                    self.misc_button.set_selected(false);
-                                    self.exploits_button.set_selected(false);
-                                }
-                                super::MenuTab::Misc => {
-                                    self.aim_button.set_selected(false);
-                                    self.esp_button.set_selected(false);
-                                    self.misc_button.set_selected(true);
-                                    self.exploits_button.set_selected(false);
-                                }
-                                super::MenuTab::Exploits => {
-                                    self.aim_button.set_selected(false);
-                                    self.esp_button.set_selected(false);
-                                    self.misc_button.set_selected(false);
-                                    self.exploits_button.set_selected(true);
-                                }
-                            }
-                        }
-                    }
-                    {
-                        let full_rect = ui.max_rect();
-                        let row_top_y = ui.min_rect().left_top().y + 50.0;
-                        let start = Pos2::new(full_rect.left_top().x + 25.0, row_top_y);
-                        let end = Pos2::new(full_rect.right_top().x, row_top_y);
-                        ui.painter().line_segment([start, end], (1.0, accent_color));
-                    }
-                    ui.add_space(25.0);
-                });
                 ui.add_space(25.0);
                 ui.horizontal(|ui| {
                     self.render_menu_bar(ui);

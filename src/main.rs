@@ -14,13 +14,11 @@ const _: () = {
     assert!(APP_ID != 0, "APP_ID cannot be 0!");
 };
 
-//shouldn't really change
-pub const DISCORD_APP_ID: i64 = 1434438467064168501;
 
 use std::{process::Command, sync::{Arc, atomic::AtomicI64}};
 
 //extern imports
-use windows_strings::{PCSTR, s};
+use windows_strings::s;
 
 //crate defs
 mod app;
@@ -32,7 +30,6 @@ pub use memory::memory::*;
 pub use widgets::*;
 mod models;
 pub use models::*;
-mod discord;
 
 #[cfg(feature = "launch_game")]
 fn launch_game() {
