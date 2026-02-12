@@ -1,11 +1,13 @@
 use std::time::Instant;
 
 use device_query::DeviceQuery;
-use egui::{Color32, FontId, LayerId, Pos2, Rect, Vec2};
-use egui_overlay::EguiOverlay;
+//use egui::{Color32, FontId, LayerId, Pos2, Rect, Vec2};
+//use egui_overlay::EguiOverlay;
 use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, WDA_NONE, WS_POPUP};
 
-impl EguiOverlay for crate::App {
+// FINDME: wth?
+
+/*impl EguiOverlay for crate::App {
     fn gui_run(
         &mut self,
         egui_context: &egui::Context,
@@ -147,7 +149,7 @@ impl EguiOverlay for crate::App {
                 min: Pos2 { x: 0.0, y: 0.0 },
                 max: Pos2 {
                     x: self.window_info.size.0 as f32,
-                    y: self.window_info.size.0 as f32,
+                    y: self.window_info.size.1 as f32,
                 },
             },
         );
@@ -292,3 +294,4 @@ impl EguiOverlay for crate::App {
         }
     }
 }
+*/

@@ -1,6 +1,7 @@
+use newoverlay::imgui::DrawListMut;
 
 impl crate::App {
-    pub fn esp(&mut self, painter: egui::Painter) {
+    pub fn esp(&mut self, _: &DrawListMut) {
         
     }
 }

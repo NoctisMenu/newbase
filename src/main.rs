@@ -5,7 +5,7 @@
 #[cfg(not(target_os = "windows"))]
 compile_error!("This application only supports Windows OS!");
 
-const PROCESS_NAME: &str = "Notepad.exe";
+const PROCESS_NAME: &str = "notepad.exe";
 #[cfg(feature = "launch_game")]
 const APP_ID: u32 = 1;
 
@@ -25,11 +25,33 @@ mod app;
 mod datatypes;
 pub use app::*;
 pub use datatypes::*;
-mod widgets;
 pub use memory::memory::*;
-pub use widgets::*;
 mod models;
+mod overlay;
+
 pub use models::*;
+
+// Setup panic hook to catch panics and log them before exiting
+fn setup_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "An unknown error occurred.".to_string()
+        };
+
+        let location = panic_info
+            .location()
+            .map(|loc| format!(" at {}:{}:{}", loc.file(), loc.line(), loc.column()))
+            .unwrap_or_default();
+
+        log::error!("Panic occurred: {}{}", message, location);
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        std::process::exit(1);
+    }));
+}
 
 #[cfg(feature = "launch_game")]
 fn launch_game() {
@@ -170,6 +192,10 @@ fn disable_console_decorations() {
 fn main() {
     // Debugging initialization
     colog::init();
+
+    // Setup panic hook to catch and log panics from all threads
+    #[cfg(debug_assertions)]
+    setup_panic_hook();
 
     disable_console_decorations();
 

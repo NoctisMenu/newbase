@@ -6,8 +6,8 @@ mod schema;
 pub use error::{ConfigError, Result};
 pub use schema::{ConfigSchema, ConfigSection, FieldMetadata, FieldSchema, FieldType, WidgetType};
 
-use crate::widgets::{Checkbox, SmoothSlider, ToggleSwitch};
-use egui::Color32;
+//use crate::widgets::{Checkbox, SmoothSlider, ToggleSwitch};
+use newoverlay::imgui::ImColor32;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -40,11 +40,11 @@ impl ConfigValue {
 
 /// Widget state wrapper for persistent UI state
 pub enum WidgetState {
-    Checkbox { checkbox: Checkbox },
-    ToggleSwitch { toggle: ToggleSwitch },
-    SmoothSlider { slider: SmoothSlider },
-    ColorPicker { picker: crate::widgets::ColorPicker },
-    ComboBox { combobox: crate::widgets::ComboBox },
+    //Checkbox { checkbox: Checkbox },
+    //ToggleSwitch { toggle: ToggleSwitch },
+    //SmoothSlider { slider: SmoothSlider },
+    //ColorPicker { picker: crate::widgets::ColorPicker },
+    //ComboBox { combobox: crate::widgets::ComboBox },
     None, // For fields without widgets (like hex strings)
 }
 
@@ -169,7 +169,6 @@ impl ConfigStore {
         // Don't replace widgets - sync values to existing widgets to preserve animation state
         let keys: Vec<String> = self.values.keys().cloned().collect();
         for key in keys {
-            self.sync_value_to_widget(&key).ok(); // Ignore errors for missing widgets
         }
         self.dirty = false;
         Ok(())
@@ -197,6 +196,7 @@ impl ConfigStore {
     ) -> HashMap<String, WidgetState> {
         let mut widgets = HashMap::new();
 
+        /*
         for (section_name, section) in &schema.sections {
             for (field_name, field) in &section.fields {
                 let key = format!("{}.{}", section_name, field_name);
@@ -289,6 +289,7 @@ impl ConfigStore {
                 widgets.insert(key, widget);
             }
         }
+         */
 
         widgets
     }
@@ -517,10 +518,10 @@ impl ConfigStore {
         }
     }
 
-    pub fn get_color(&self, key: &str) -> Result<Color32> {
+    pub fn get_color(&self, key: &str) -> Result<ImColor32> {
         match self.values.get(key) {
             Some(ConfigValue::Color { r, g, b, a }) => {
-                Ok(Color32::from_rgba_unmultiplied(*r, *g, *b, *a))
+                Ok(ImColor32::from_rgba(*r, *g, *b, *a))
             }
             Some(v) => Err(ConfigError::TypeMismatch {
                 key: key.to_string(),
@@ -590,16 +591,8 @@ impl ConfigStore {
         }
     }
 
-    pub fn set_color(&mut self, key: &str, color: Color32) -> Result<()> {
-        if Self::find_field_schema(&self.schema, key).is_some() {
-            let (r, g, b, a) = color.to_tuple();
-            self.values
-                .insert(key.to_string(), ConfigValue::Color { r, g, b, a });
-            self.dirty = true;
-            Ok(())
-        } else {
-            Err(ConfigError::KeyNotFound(key.to_string()))
-        }
+    pub fn set_color(&mut self, key: &str, color: ImColor32) -> Result<()> {
+        Ok(())
     }
 
     pub fn set_enum(&mut self, key: &str, value: String) -> Result<()> {
@@ -635,121 +628,9 @@ impl ConfigStore {
 
     // Widget accessors
 
-    pub fn widget_checkbox(&mut self, key: &str) -> Result<&mut Checkbox> {
-        match self.widgets.get_mut(key) {
-            Some(WidgetState::Checkbox { checkbox }) => Ok(checkbox),
-            Some(_) => Err(ConfigError::WidgetTypeMismatch(key.to_string())),
-            None => Err(ConfigError::KeyNotFound(key.to_string())),
-        }
-    }
-
-    pub fn widget_toggle(&mut self, key: &str) -> Result<&mut ToggleSwitch> {
-        match self.widgets.get_mut(key) {
-            Some(WidgetState::ToggleSwitch { toggle }) => Ok(toggle),
-            Some(_) => Err(ConfigError::WidgetTypeMismatch(key.to_string())),
-            None => Err(ConfigError::KeyNotFound(key.to_string())),
-        }
-    }
-
-    pub fn widget_slider(&mut self, key: &str) -> Result<&mut SmoothSlider> {
-        match self.widgets.get_mut(key) {
-            Some(WidgetState::SmoothSlider { slider }) => Ok(slider),
-            Some(_) => Err(ConfigError::WidgetTypeMismatch(key.to_string())),
-            None => Err(ConfigError::KeyNotFound(key.to_string())),
-        }
-    }
-
-    pub fn widget_colorpicker(&mut self, key: &str) -> Result<&mut crate::widgets::ColorPicker> {
-        match self.widgets.get_mut(key) {
-            Some(WidgetState::ColorPicker { picker }) => Ok(picker),
-            Some(_) => Err(ConfigError::WidgetTypeMismatch(key.to_string())),
-            None => Err(ConfigError::KeyNotFound(key.to_string())),
-        }
-    }
-
     // Sync methods
 
-    /// Sync widget state to config value
-    pub fn sync_widget_to_value(&mut self, key: &str) -> Result<()> {
-        let value = match self.widgets.get(key) {
-            Some(WidgetState::Checkbox { checkbox }) => ConfigValue::Bool(checkbox.enabled),
-            Some(WidgetState::ToggleSwitch { toggle }) => ConfigValue::Bool(toggle.enabled),
-            Some(WidgetState::SmoothSlider { slider }) => ConfigValue::Float(slider.value),
-            Some(WidgetState::ColorPicker { picker }) => {
-                let (r, g, b, a) = picker.color.to_tuple();
-                ConfigValue::Color { r, g, b, a }
-            }
-            Some(WidgetState::ComboBox { combobox }) => {
-                if let Some(value) = combobox.selected_value() {
-                    ConfigValue::Enum(value.to_string())
-                } else {
-                    return Err(ConfigError::InvalidValue(format!(
-                        "ComboBox has no selected value for key '{}'",
-                        key
-                    )));
-                }
-            }
-            Some(WidgetState::None) => return Ok(()), // No widget to sync
-            None => return Err(ConfigError::KeyNotFound(key.to_string())),
-        };
-
-        self.values.insert(key.to_string(), value);
-        self.dirty = true;
-        Ok(())
-    }
-
     /// Sync config value to widget
-    pub fn sync_value_to_widget(&mut self, key: &str) -> Result<()> {
-        let value = self
-            .values
-            .get(key)
-            .ok_or_else(|| ConfigError::KeyNotFound(key.to_string()))?
-            .clone();
-
-        match (self.widgets.get_mut(key), value) {
-            (Some(WidgetState::Checkbox { checkbox }), ConfigValue::Bool(v)) => {
-                // Only update if different
-                if checkbox.enabled != v {
-                    checkbox.set(v);
-                }
-            }
-            (Some(WidgetState::ToggleSwitch { toggle }), ConfigValue::Bool(v)) => {
-                // Only update if different
-                if toggle.enabled != v {
-                    toggle.set(v);
-                }
-            }
-            (Some(WidgetState::SmoothSlider { slider }), ConfigValue::Float(v)) => {
-                // Only update if significantly different (avoid fighting with user input)
-                if (slider.value - v).abs() > 0.01 {
-                    slider.set_value(v);
-                }
-            }
-            (Some(WidgetState::ColorPicker { picker }), ConfigValue::Color { r, g, b, a }) => {
-                let new_color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
-                if picker.color != new_color {
-                    picker.set(new_color);
-                }
-            }
-            (Some(WidgetState::ComboBox { combobox }), ConfigValue::Enum(variant)) => {
-                // Find the index of the variant in the options
-                if let Some(index) = combobox.options.iter().position(|opt| opt == &variant) {
-                    if combobox.selected_index() != index {
-                        combobox.set_selected_index(index);
-                    }
-                }
-            }
-            (Some(WidgetState::None), _) => {} // No widget to sync
-            _ => {
-                return Err(ConfigError::TypeMismatch {
-                    key: key.to_string(),
-                    expected: "matching type".to_string(),
-                    got: "mismatch".to_string(),
-                });
-            }
-        }
-        Ok(())
-    }
 
     /// Get field schema by key
     pub fn get_field_schema(&self, key: &str) -> Option<&FieldSchema> {
@@ -764,316 +645,5 @@ impl ConfigStore {
     /// Clear field highlight
     pub fn clear_highlight(&mut self) {
         self.highlighted_field = None;
-    }
-
-    // Helper rendering methods for easier GUI integration
-
-    /// Render a checkbox widget and sync value
-    pub fn render_checkbox(
-        &mut self,
-        ui: &mut egui::Ui,
-        key: &str,
-        accent_color: Color32,
-    ) -> Result<()> {
-        // Get display name first
-        let display_name = self
-            .get_field_schema(key)
-            .ok_or_else(|| ConfigError::KeyNotFound(key.to_string()))?
-            .metadata
-            .display_name
-            .clone();
-
-        // Sync value to widget before rendering
-        self.sync_value_to_widget(key)?;
-
-        // Render
-        let checkbox = self.widget_checkbox(key)?;
-        checkbox.display(ui, &display_name, accent_color);
-
-        // Sync back if changed
-        self.sync_widget_to_value(key)?;
-
-        Ok(())
-    }
-
-    /// Render a toggle switch widget and sync value
-    pub fn render_toggle(
-        &mut self,
-        ui: &mut egui::Ui,
-        key: &str,
-        accent_color: Color32,
-    ) -> Result<()> {
-        // Get display name first
-        let display_name = self
-            .get_field_schema(key)
-            .ok_or_else(|| ConfigError::KeyNotFound(key.to_string()))?
-            .metadata
-            .display_name
-            .clone();
-
-        // Sync value to widget before rendering
-        self.sync_value_to_widget(key)?;
-
-        // Render
-        let toggle = self.widget_toggle(key)?;
-        toggle.display(ui, &display_name, accent_color);
-
-        // Sync back if changed
-        self.sync_widget_to_value(key)?;
-
-        Ok(())
-    }
-
-    /// Render a slider widget and sync value
-    pub fn render_slider(
-        &mut self,
-        ui: &mut egui::Ui,
-        key: &str,
-        label: Option<&str>,
-        accent_color: Color32,
-    ) -> Result<()> {
-        // Get display name first
-        let display_name = self
-            .get_field_schema(key)
-            .ok_or_else(|| ConfigError::KeyNotFound(key.to_string()))?
-            .metadata
-            .display_name
-            .clone();
-
-        // Sync value to widget before rendering
-        self.sync_value_to_widget(key)?;
-
-        // Render
-        let slider = self.widget_slider(key)?;
-        let display_label = label.unwrap_or(&display_name);
-        slider.display(ui, display_label, label, accent_color);
-
-        // Sync back if changed
-        self.sync_widget_to_value(key)?;
-
-        Ok(())
-    }
-
-    /// Render a color picker widget and sync value
-    pub fn render_colorpicker(&mut self, ui: &mut egui::Ui, key: &str) -> Result<()> {
-        // Get display name first
-        let display_name = self
-            .get_field_schema(key)
-            .ok_or_else(|| ConfigError::KeyNotFound(key.to_string()))?
-            .metadata
-            .display_name
-            .clone();
-
-        // Sync value to widget before rendering
-        self.sync_value_to_widget(key)?;
-
-        // Render
-        let picker = self.widget_colorpicker(key)?;
-        picker.display(ui, &display_name);
-
-        // Sync back if changed
-        self.sync_widget_to_value(key)?;
-
-        Ok(())
-    }
-
-    /// Render a combobox widget with auto-generated options from schema
-    pub fn render_combobox(
-        &mut self,
-        ui: &mut egui::Ui,
-        key: &str,
-        accent_color: egui::Color32,
-    ) -> Result<()> {
-        // Get field schema to extract display name
-        let field_schema = self
-            .get_field_schema(key)
-            .ok_or_else(|| ConfigError::KeyNotFound(key.to_string()))?;
-
-        let display_name = field_schema.metadata.display_name.clone();
-
-        // Sync value to widget before rendering
-        self.sync_value_to_widget(key)?;
-
-        // Render using custom widget
-        ui.horizontal(|ui| {
-            ui.label(&display_name);
-
-            // Get mutable reference to the combobox widget
-            if let Some(WidgetState::ComboBox { combobox }) = self.widgets.get_mut(key) {
-                // Update accent color directly
-                combobox.colors.border_focused = accent_color;
-                combobox.colors.item_hovered = accent_color.linear_multiply(0.3);
-
-                combobox.show(ui);
-            }
-        });
-
-        // Sync widget to value after rendering
-        self.sync_widget_to_value(key)?;
-
-        Ok(())
-    }
-
-    /// Render all widgets for a section with category-based grouping
-    pub fn render_section(
-        &mut self,
-        ui: &mut egui::Ui,
-        section_name: &str,
-        accent_color: egui::Color32,
-    ) -> Result<()> {
-        use std::collections::HashMap;
-
-        // Get section from schema
-        let section = self.schema.sections.get(section_name).ok_or_else(|| {
-            ConfigError::InvalidValue(format!("Section '{}' not found", section_name))
-        })?;
-
-        // Handle empty sections
-        if section.fields.is_empty() {
-            ui.centered_and_justified(|ui| {
-                ui.label(
-                    egui::RichText::new("No settings available")
-                        .color(egui::Color32::GRAY)
-                        .size(14.0),
-                );
-            });
-            return Ok(());
-        }
-
-        // Group fields by category
-        let mut categories: HashMap<String, Vec<(String, FieldSchema)>> = HashMap::new();
-        for (field_name, field_schema) in &section.fields {
-            if field_schema.public {
-                let category = field_schema.metadata.category.clone();
-                categories
-                    .entry(category)
-                    .or_insert_with(Vec::new)
-                    .push((field_name.clone(), field_schema.clone()));
-            }
-        }
-
-        // Sort categories alphabetically for consistent ordering
-        let mut category_names: Vec<String> = categories.keys().cloned().collect();
-        category_names.sort();
-
-        // Render each category in its own frame
-        for category_name in category_names {
-            let fields = categories.get(&category_name).unwrap();
-
-            // Skip categories with no visible fields
-            if fields.is_empty() {
-                continue;
-            }
-
-            egui::Frame::none()
-                .fill(accent_color.lerp_to_gamma(Color32::TRANSPARENT, 0.9))
-                .stroke((1.0, accent_color))
-                .rounding(egui::Rounding::same(6.0))
-                .inner_margin(8.0)
-                .show(ui, |ui| {
-                    // Category header
-                    ui.label(
-                        egui::RichText::new(&category_name)
-                            .color(accent_color)
-                            .size(13.0)
-                            .strong(),
-                    );
-                    ui.add_space(4.0);
-
-                    // Sort fields within category alphabetically
-                    let mut sorted_fields = fields.clone();
-                    sorted_fields.sort_by_key(|(name, _)| name.clone());
-
-                    // Render fields in a single column (columns cause popup issues with ComboBox)
-                    for (field_name, field_schema) in sorted_fields.iter() {
-                        let key = format!("{}.{}", section_name, field_name);
-
-                        if let Err(e) = self.render_field(ui, &key, field_schema, accent_color) {
-                            log::warn!("Failed to render field '{}': {}", key, e);
-                        }
-
-                        ui.add_space(4.0);
-                    }
-                });
-
-            ui.add_space(6.0); // Space between category groups
-        }
-
-        Ok(())
-    }
-
-    /// Render a single field based on its widget type
-    fn render_field(
-        &mut self,
-        ui: &mut egui::Ui,
-        key: &str,
-        field_schema: &FieldSchema,
-        accent_color: egui::Color32,
-    ) -> Result<()> {
-        // Check if this field is highlighted
-        let is_highlighted = self.highlighted_field.as_ref().map_or(false, |h| h == key);
-
-        // Allocate space for the widget with potential glow
-        let available_width = ui.available_width();
-        let (rect, response) =
-            ui.allocate_exact_size(egui::Vec2::new(available_width, 30.0), egui::Sense::hover());
-
-        // If highlighted and hovered, clear the highlight
-        if is_highlighted && response.hovered() {
-            self.highlighted_field = None;
-        }
-
-        // Draw glow effect if highlighted
-        if is_highlighted {
-            let glow_color = accent_color.linear_multiply(0.5);
-
-            // Draw multiple layers for glow effect
-            for i in 0..3 {
-                let expansion = (3 - i) as f32 * 2.0;
-                let alpha_multiplier = 0.3 - (i as f32 * 0.1);
-                let glow_rect = rect.expand(expansion);
-
-                ui.painter().rect(
-                    glow_rect,
-                    egui::Rounding::same(6.0),
-                    egui::Color32::TRANSPARENT,
-                    egui::Stroke::new(
-                        1.5,
-                        egui::Color32::from_rgba_unmultiplied(
-                            glow_color.r(),
-                            glow_color.g(),
-                            glow_color.b(),
-                            (glow_color.a() as f32 * alpha_multiplier) as u8,
-                        ),
-                    ),
-                );
-            }
-        }
-
-        // Render the actual widget inside the allocated space
-        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
-            match &field_schema.widget_type {
-                WidgetType::Checkbox => {
-                    self.render_checkbox(ui, key, accent_color).ok();
-                }
-                WidgetType::Toggle => {
-                    self.render_toggle(ui, key, accent_color).ok();
-                }
-                WidgetType::SmoothSlider { .. } => {
-                    self.render_slider(ui, key, None, accent_color).ok();
-                }
-                WidgetType::ColorPicker => {
-                    self.render_colorpicker(ui, key).ok();
-                }
-                WidgetType::ComboBox => {
-                    self.render_combobox(ui, key, accent_color).ok();
-                }
-                WidgetType::None => {
-                    // Skip rendering for None widgets (like accent_hex)
-                }
-            }
-        });
-
-        Ok(())
     }
 }

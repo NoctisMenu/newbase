@@ -1,5 +1,8 @@
 
-use egui::{Color32, FontId, Painter, Pos2, Rect, RichText, Rounding, Stroke, Vec2};
+//use egui::{Color32, FontId, Painter, Pos2, Rect, RichText, Rounding, Stroke, Vec2};
+
+use newoverlay::imgui::{ImColor32, Ui, Font, FontConfig};
+
 use std::time::Duration;
 
 use crate::config;
@@ -10,8 +13,8 @@ pub struct Cheat<'a> {
 }
 
 impl crate::App {
-    pub fn render_menu_bar(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::none().inner_margin(10.0).show(ui, |ui| {
+    pub fn render_menu_bar(&mut self, ui: &Ui) {
+        /*egui::Frame::none().inner_margin(10.0).show(ui, |ui| {
             ui.set_min_size(Vec2::new(100.0, 500.0));
             ui.vertical(|ui| {
                 ui.add_space(100.0);
@@ -54,11 +57,11 @@ impl crate::App {
                     self.exploits_button.set_selected(false);
                 };
             });
-        });
+        });*/
     }
 
-    pub fn render_aim_frame(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::none()
+    pub fn render_aim_frame(&mut self, ui: &Ui) {
+        /*egui::Frame::none()
             .inner_margin(5.0)
             .fill(Color32::from_rgba_unmultiplied(0, 0, 0, 70))
             //.stroke(Stroke::new(1.0, self.config.core_config.accent_color))
@@ -75,11 +78,11 @@ impl crate::App {
 
                 // Auto-render all widgets from "aim" section
                 config.render_section(ui, "aim", accent).ok();
-            });
+            });*/
     }
 
-    pub fn render_esp_frame(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::none()
+    pub fn render_esp_frame(&mut self, ui: &Ui) {
+        /*egui::Frame::none()
             .inner_margin(5.0)
             .fill(Color32::from_rgba_unmultiplied(0, 0, 0, 70))
             //.stroke(Stroke::new(1.0, self.config.core_config.accent_color))
@@ -96,11 +99,11 @@ impl crate::App {
 
                 // Auto-render all widgets from "esp" section
                 config.render_section(ui, "esp", accent).ok();
-            });
+            });*/
     }
 
-    pub fn render_exploits_frame(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::none()
+    pub fn render_exploits_frame(&mut self, ui: &Ui) {
+        /*egui::Frame::none()
             .inner_margin(5.0)
             .fill(Color32::from_rgba_unmultiplied(0, 0, 0, 70))
             .rounding(Rounding::same(8.0))
@@ -116,11 +119,11 @@ impl crate::App {
 
                 // Auto-render all widgets from "exploits" section
                 config.render_section(ui, "exploits", accent).ok();
-            });
+            });*/
     }
 
-    pub fn render_misc_frame(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::none()
+    pub fn render_misc_frame(&mut self, ui: &Ui) {
+        /*egui::Frame::none()
             .inner_margin(5.0)
             .fill(Color32::from_rgba_unmultiplied(0, 0, 0, 70))
             //.stroke(Stroke::new(1.0, self.config.core_config.accent_color))
@@ -172,11 +175,11 @@ impl crate::App {
                 if ui.button("Terminate").clicked() {
                     self.exit = true;
                 }
-            });
+            });*/
     }
 
-    pub fn render_menu(&mut self, ctx: &egui::Context, painter: Painter) {
-        //make it so that windows won't have drop shadow behind them (could look cool in future?)
+    pub fn render_menu(&mut self, ui: &Ui) {
+        /*//make it so that windows won't have drop shadow behind them (could look cool in future?)
         let mut visuals = egui::Visuals::default();
 
         visuals.window_shadow = egui::epaint::Shadow {
@@ -328,10 +331,12 @@ impl crate::App {
                     ui.label(&self.debug);
                 });
             self.debug = "".to_string()
-        }
+        }*/
+
+        // FINDME: Render menu entrypoint
     }
-    pub fn dim_window(&self, ui: &mut egui::Ui, painter: Painter) {
-        let rect = ui.max_rect();
-        painter.rect_filled(rect, 3.0, Color32::from_rgba_unmultiplied(0, 0, 0, 150));
+    pub fn dim_window(&self, ui: &Ui) {
+        //let rect = ui.max_rect();
+        //painter.rect_filled(rect, 3.0, Color32::from_rgba_unmultiplied(0, 0, 0, 150));
     }
 }

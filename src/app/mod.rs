@@ -1,6 +1,8 @@
 use anyhow::Result;
 use windowing::WindowInfo;
 
+use std::sync::Mutex;
+
 mod gui;
 mod logic;
 mod overlay;
@@ -9,24 +11,24 @@ mod macros;
 mod threads;
 
 use crate::{
-    Animation, DoubleBuffer, Player,
-    widgets::{MenuButton, SearchBar, Toasts},
+    DoubleBuffer, Player,
 };
 use windows::Win32::Foundation::HWND;
 
 
-use egui::{Pos2, Vec2, mutex::Mutex};
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::AtomicI64},
     thread::JoinHandle,
     time::{Duration, Instant},
 };
+use newoverlay::imgui::ImColor32;
+use newoverlay::Overlay;
 
 #[derive(PartialEq)]
 pub struct FloatingPoint {
-    pub pos: Pos2,
-    pub velocity: Vec2,
+    pub pos: [f32; 2],
+    pub velocity: [f32; 2],
 }
 pub struct App {
     //internal details
@@ -34,7 +36,7 @@ pub struct App {
     pub game_pid: u32,
     pub visible: bool,
     pub streamproofed: bool,
-    pub visible_animation: Animation,
+    //pub visible_animation: Animation,
     pub show_time: std::time::Instant,
     pub init: bool,
     pub exit: bool,
@@ -56,11 +58,11 @@ pub struct App {
     pub averaged_true_fps: f32,
     pub config_store: Arc<parking_lot::RwLock<config_system::ConfigStore>>,
     pub tab: MenuTab,
-    pub aim_button: MenuButton,
-    pub esp_button: MenuButton,
-    pub exploits_button: MenuButton,
-    pub misc_button: MenuButton,
-    pub toasts: Toasts,
+    //pub aim_button: MenuButton,
+    //pub esp_button: MenuButton,
+    //pub exploits_button: MenuButton,
+    //pub misc_button: MenuButton,
+    //pub toasts: Toasts,
 
     //game details
     pub player_buffer: Arc<DoubleBuffer<Player>>,
@@ -73,8 +75,8 @@ impl Default for App {
             game_pid: 0,
             visible: true,
             streamproofed: false,
-            visible_animation: Animation::new(std::time::Duration::from_millis(1500), None),
-            show_time: std::time::Instant::now(),
+            //visible_animation: Animation::new(std::time::Duration::from_millis(1500), None),
+            show_time: Instant::now(),
             game_window: HWND::default(),
             window_info: WindowInfo {
                 pos: (0, 0),
@@ -91,11 +93,11 @@ impl Default for App {
             true_frametime: Duration::from_secs(1),
             true_frame_samples: Vec::new(),
             averaged_true_fps: 0.0,
-            aim_button: MenuButton::new(None),
-            esp_button: MenuButton::new(None),
-            exploits_button: MenuButton::new(None),
-            misc_button: MenuButton::new(None),
-            toasts: Toasts::new(),
+            //aim_button: MenuButton::new(None),
+            //esp_button: MenuButton::new(None),
+            //exploits_button: MenuButton::new(None),
+            //misc_button: MenuButton::new(None),
+            //toasts: Toasts::new(),
 
             config_store: Arc::new(parking_lot::RwLock::new(
                 config_system::ConfigStore::load_with_fallback(),
@@ -135,7 +137,34 @@ impl App {
             ..Default::default()
         };
         app.spawn_all_threads();
-        egui_overlay::start(app)
+        app.run();
+
+        //egui_overlay::start(app)
+
+        /*
+        let mut overlay = match Overlay::new() {
+            Some(o) => o,
+            None => {
+                eprintln!("Failed to initialize overlay");
+                return;
+            }
+        };
+
+        loop {
+            if !overlay.start_render() {
+                break;
+            }
+
+            overlay.render(|ui| {
+                ui.get_background_draw_list().add_text(
+                    [200.0, 200.0],
+                    ImColor32::BLACK,
+                    &format!("sup {:#?}", app.threads_status())
+                );
+
+                println!("sup {:#?}", app.threads_status());
+            })
+        }*/
     }
 
     pub fn threads_status(&self) -> Vec<(String, f32)> {
@@ -145,9 +174,15 @@ impl App {
                 handle.0.clone(),
                 self.threads_performance
                     .get(handle.0)
-                    .unwrap()
-                    .lock()
-                    .as_secs_f32(),
+                    .map(|perf| {
+                        let perf = perf.lock().unwrap();
+                        if perf.as_millis() == 0 {
+                            0.0
+                        } else {
+                            (1000.0 / perf.as_millis() as f32).min(9999.0)
+                        }
+                    })
+                    .unwrap_or(0.0),
             ));
         }
         ret
@@ -183,7 +218,7 @@ impl App {
                     //retarded
                     #[cfg(debug_assertions)]
                     {
-                        *thread_perf.lock() = start.elapsed();
+                        *thread_perf.lock().unwrap() = start.elapsed();
                     }
                 }
             })
