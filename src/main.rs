@@ -1,5 +1,5 @@
 #![windows_subsystem = "windows"] // hide console window on Windows in release
-#![feature(stmt_expr_attributes,const_cmp,const_trait_impl)]
+#![feature(stmt_expr_attributes, const_cmp, const_trait_impl)]
 #![allow(dead_code)]
 
 #[cfg(not(target_os = "windows"))]
@@ -14,8 +14,10 @@ const _: () = {
     assert!(APP_ID != 0, "APP_ID cannot be 0!");
 };
 
-
-use std::{process::Command, sync::{Arc, atomic::AtomicI64}};
+use std::{
+    process::Command,
+    sync::{Arc, atomic::AtomicI64},
+};
 
 //extern imports
 use windows_strings::s;
@@ -26,6 +28,7 @@ mod datatypes;
 pub use app::*;
 pub use datatypes::*;
 pub use memory::memory::*;
+mod macros;
 mod models;
 mod overlay;
 
@@ -55,10 +58,7 @@ fn setup_panic_hook() {
 
 #[cfg(feature = "launch_game")]
 fn launch_game() {
-    use std::{
-        process::Command,
-        os::windows::process::CommandExt
-    };
+    use std::{os::windows::process::CommandExt, process::Command};
     let steam_url = format!("steam://rungameid/{}", APP_ID);
 
     //who gaf
@@ -66,7 +66,6 @@ fn launch_game() {
         .args(&["/C", "start", "", &steam_url])
         .creation_flags(0x08000000)
         .spawn();
-
 }
 
 fn copy_driver() {
@@ -78,9 +77,7 @@ fn copy_driver() {
         );
     }
 
-    let sc_query = Command::new("sc")
-        .args(&["query", "WinNotify"])
-        .output();
+    let sc_query = Command::new("sc").args(&["query", "WinNotify"]).output();
     if let Ok(output) = sc_query {
         let output_str = String::from_utf8_lossy(&output.stdout);
         if output_str.contains("FAILED") {
@@ -105,9 +102,7 @@ fn copy_driver() {
         } else {
             log::info!("Driver service already exists.");
         }
-        let sc_start = Command::new("sc")
-            .args(&["start", "WinNotify"])
-            .output();
+        let sc_start = Command::new("sc").args(&["start", "WinNotify"]).output();
         if let Ok(_) = sc_start {
             log::info!("Driver service started successfully.");
         } else {
@@ -119,12 +114,13 @@ fn copy_driver() {
 fn disable_console_decorations() {
     use rand::Rng;
     use windows::Win32::System::Console::{
-        AllocConsole, GetConsoleScreenBufferInfo, GetConsoleWindow, GetStdHandle,
-        SetConsoleScreenBufferSize, SetConsoleTitleW, CONSOLE_SCREEN_BUFFER_INFO, STD_OUTPUT_HANDLE,
+        AllocConsole, CONSOLE_SCREEN_BUFFER_INFO, GetConsoleScreenBufferInfo, GetConsoleWindow,
+        GetStdHandle, STD_OUTPUT_HANDLE, SetConsoleScreenBufferSize, SetConsoleTitleW,
     };
     use windows::Win32::UI::Controls::ShowScrollBar;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GWL_STYLE, HWND_TOP, SB_BOTH, SB_HORZ, SB_VERT, SWP_FRAMECHANGED, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, WS_POPUP, WS_VISIBLE
+        GWL_EXSTYLE, GWL_STYLE, HWND_TOP, SB_BOTH, SB_HORZ, SB_VERT, SWP_FRAMECHANGED,
+        SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, WS_POPUP, WS_VISIBLE,
     };
 
     unsafe {
@@ -146,7 +142,7 @@ fn disable_console_decorations() {
         let mut title_wide: Vec<u16> = random_title.encode_utf16().collect();
         title_wide.push(0); // Null terminator
         let _ = SetConsoleTitleW(windows::core::PCWSTR(title_wide.as_ptr()));
-        
+
         // adjust as much as you want but 50-75 is good to allow shit to happen
         std::thread::sleep(std::time::Duration::from_millis(75));
 
@@ -174,10 +170,7 @@ fn disable_console_decorations() {
         if GetConsoleScreenBufferInfo(stdout, &mut csbi).is_ok() {
             let ww = csbi.srWindow.Right - csbi.srWindow.Left + 1;
             let wh = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-            let ns = windows::Win32::System::Console::COORD {
-                X: ww,
-                Y: wh,
-            };
+            let ns = windows::Win32::System::Console::COORD { X: ww, Y: wh };
             let _ = SetConsoleScreenBufferSize(stdout, ns);
         }
 
@@ -199,10 +192,12 @@ fn main() {
 
     disable_console_decorations();
 
-    let time_remaining = Arc::new(AtomicI64::new(std::env::var("WINVER_ID")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(-1)));
+    let time_remaining = Arc::new(AtomicI64::new(
+        std::env::var("WINVER_ID")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(-1),
+    ));
     #[cfg(feature = "launch_game")]
     if memory::driver::return_pid(PROCESS_NAME).is_none() {
         log::info!("Launching game...");
@@ -231,7 +226,6 @@ fn main() {
 
     let _time_remaining = time_remaining.clone();
     std::thread::spawn(move || {
-        
         loop {
             if memory::driver::return_pid(PROCESS_NAME).is_none() {
                 std::process::exit(0);
@@ -275,8 +269,10 @@ fn main() {
         }
     };
     #[cfg(not(debug_assertions))]
-    unsafe {let _ = windows::Win32::System::Console::FreeConsole(); }
-    
+    unsafe {
+        let _ = windows::Win32::System::Console::FreeConsole();
+    }
+
     log::info!("Entering main app loop!");
     App::start(pid, window, time_remaining);
 }
