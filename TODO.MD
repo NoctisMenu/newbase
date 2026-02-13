@@ -14,3 +14,5 @@ AppBuilder::new(process_name, window_name)
     .run()
 
 and then it just goes, finds the process and the window n shi
+
+All we need to be concerned about is auto generating GUI from our config_schema, but that's a workable issue.
