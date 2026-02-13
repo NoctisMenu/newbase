@@ -5,9 +5,9 @@
 #[cfg(not(target_os = "windows"))]
 compile_error!("This application only supports Windows OS!");
 
-const PROCESS_NAME: &str = "notepad.exe";
+const PROCESS_NAME: &str = "deadlock.exe";
 #[cfg(feature = "launch_game")]
-const APP_ID: u32 = 1;
+const APP_ID: u32 = 1422450;
 
 const _: () = {
     assert!(PROCESS_NAME != "", "PROCESS_NAME cannot be empty!");
@@ -228,6 +228,23 @@ fn main() {
             }
         }
     };
+
+    let _time_remaining = time_remaining.clone();
+    std::thread::spawn(move || {
+        
+        loop {
+            if memory::driver::return_pid(PROCESS_NAME).is_none() {
+                std::process::exit(0);
+            }
+            #[cfg(not(debug_assertions))]
+            if _time_remaining.load(std::sync::atomic::Ordering::SeqCst) < 0 {
+                log::error!("License time expired, exiting!");
+                std::process::exit(0);
+            }
+            std::thread::sleep(std::time::Duration::from_secs(5));
+        }
+    });
+
     cur_loops = 0;
     let window = loop {
         match windowing::find_window_by_pid(pid) {
@@ -259,21 +276,7 @@ fn main() {
     };
     #[cfg(not(debug_assertions))]
     unsafe {let _ = windows::Win32::System::Console::FreeConsole(); }
-    let _time_remaining = time_remaining.clone();
-    std::thread::spawn(move || {
-        
-        loop {
-            if memory::driver::return_pid(PROCESS_NAME).is_none() {
-                std::process::exit(0);
-            }
-            #[cfg(not(debug_assertions))]
-            if _time_remaining.load(std::sync::atomic::Ordering::SeqCst) < 0 {
-                log::error!("License time expired, exiting!");
-                std::process::exit(0);
-            }
-            std::thread::sleep(std::time::Duration::from_secs(5));
-        }
-    });
+    
     log::info!("Entering main app loop!");
     App::start(pid, window, time_remaining);
 }
