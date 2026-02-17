@@ -29,7 +29,8 @@ pub fn regenerate_generated_files_from_paths(
         )
     })?;
 
-    let schema: toml::Value = toml::from_str(&schema_content).context("Failed to parse schema TOML")?;
+    let schema: toml::Value =
+        toml::from_str(&schema_content).context("Failed to parse schema TOML")?;
 
     let keys_output = generate_keys_source(&schema);
     let macros_output = generate_macros_source(&schema);
@@ -55,7 +56,9 @@ fn generate_keys_source(schema: &toml::Value) -> String {
     let mut output = String::from("// Auto-generated config key constants\n");
     output.push_str("// DO NOT EDIT - Generated from config_schema.toml\n");
     output.push_str("//\n");
-    output.push_str("// Regenerate via crate::app::config_system::codegen::regenerate_generated_files()\n");
+    output.push_str(
+        "// Regenerate via crate::app::config_system::codegen::regenerate_generated_files()\n",
+    );
     output.push_str("\n");
 
     if let Some(sections) = schema.get("sections").and_then(|s| s.as_table()) {

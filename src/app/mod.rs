@@ -8,13 +8,13 @@ pub mod config_system;
 mod gui;
 use windows::Win32::Foundation::HWND;
 
-use newoverlay::Overlay;
 use newoverlay::imgui::ImColor32;
+use newoverlay::Overlay;
 use std::{
     collections::HashMap,
     sync::{
-        Arc,
         atomic::{AtomicBool, AtomicI64, Ordering},
+        Arc,
     },
     thread::JoinHandle,
     time::{Duration, Instant},
@@ -49,7 +49,12 @@ pub trait LogicSystem<S>: Send {
         std::any::type_name::<Self>()
     }
 
-    fn tick(&self, app: &mut App<S>, ui: &newoverlay::imgui::Ui, draw_list: &newoverlay::imgui::DrawListMut);
+    fn tick(
+        &self,
+        app: &mut App<S>,
+        ui: &newoverlay::imgui::Ui,
+        draw_list: &newoverlay::imgui::DrawListMut,
+    );
 }
 
 #[derive(PartialEq)]
@@ -63,6 +68,28 @@ pub struct MenuLogo {
     pub uv_min: [f32; 2],
     pub uv_max: [f32; 2],
     pub aspect_ratio: f32,
+}
+
+pub struct MenuUiState {
+    pub selected_sidebar: usize,
+    pub language_idx: usize,
+    pub render_scale_idx: usize,
+    pub controller_idx: usize,
+    pub blur_strength: f32,
+    pub block_input: bool,
+}
+
+impl Default for MenuUiState {
+    fn default() -> Self {
+        Self {
+            selected_sidebar: 5,
+            language_idx: 0,
+            render_scale_idx: 1,
+            controller_idx: 0,
+            blur_strength: 2.50,
+            block_input: true,
+        }
+    }
 }
 
 pub struct App<S> {
@@ -106,6 +133,7 @@ pub struct App<S> {
     pub menu_logo: Option<MenuLogo>,
     pub menu_intro_elapsed: f32,
     pub menu_intro_finished: bool,
+    pub menu_ui_state: MenuUiState,
 }
 
 // Builder pattern for easier setup
@@ -158,6 +186,7 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
             menu_logo: None,
             menu_intro_elapsed: 0.0,
             menu_intro_finished: false,
+            menu_ui_state: MenuUiState::default(),
         };
         Self { app }
     }
@@ -262,7 +291,11 @@ impl<S: Send + Sync + 'static> App<S> {
     }
 
     /// Run all logic systems (called each frame)
-    pub fn tick_logic(&mut self, ui: &newoverlay::imgui::Ui, draw_list: &newoverlay::imgui::DrawListMut) {
+    pub fn tick_logic(
+        &mut self,
+        ui: &newoverlay::imgui::Ui,
+        draw_list: &newoverlay::imgui::DrawListMut,
+    ) {
         self.is_ticking_logic = true;
         // Move out only the Vec header (ptr/len/cap), not the boxed systems.
         let systems = std::mem::take(&mut self.logic_systems);
@@ -278,11 +311,7 @@ impl<S: Send + Sync + 'static> App<S> {
     // === Thread Management ===
 
     /// Register/spawn a managed thread (builder-only).
-    fn spawn_thread<F>(
-        &mut self,
-        thread_name: impl Into<String>,
-        mut task: F,
-    ) -> Result<(), String>
+    fn spawn_thread<F>(&mut self, thread_name: impl Into<String>, mut task: F) -> Result<(), String>
     where
         F: FnMut(&ThreadCtx<S>) -> ThreadFlow + Send + 'static,
     {

@@ -3,7 +3,6 @@
 //
 // Regenerate via crate::app::config_system::codegen::regenerate_generated_files()
 
-
 // aim section
 pub const AIM_ENABLED: &str = "aim.aim_enabled";
 pub const AIM_FOV: &str = "aim.aim_fov";

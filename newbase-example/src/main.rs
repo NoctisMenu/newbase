@@ -174,10 +174,7 @@ fn cache_players(ctx: &ThreadCtx<AppData>) -> ThreadFlow {
         if ent_entry == 0 {
             continue;
         }
-        dbg!(ent_entry);
         let controller = skip_err!(read::<usize>(ent_entry + 0x78 * (i & 0x1ff)));
-        dbg!(controller);
-        dbg!(read::<usize>(controller + 0x8F0 + 0x1c));
         let pawn_handle = skip_err!(read::<usize>(controller + 0x8ac));
         let entry = skip_err!(read::<usize>(
             entity_list + 0x8 * ((pawn_handle & 0x7FFF) >> 9) + 16
@@ -185,8 +182,6 @@ fn cache_players(ctx: &ThreadCtx<AppData>) -> ThreadFlow {
         let pawn = skip_err!(read::<usize>(entry + 0x78 * (pawn_handle & 0x1ff)));
         let scene_node = skip_err!(read::<usize>(pawn + 0x330));
         let pos = skip_err!(read::<Vector3>(scene_node + 0xc8));
-        dbg!(i);
-        dbg!(scene_node);
         dbg!(pos);
     }
     ThreadFlow::Continue

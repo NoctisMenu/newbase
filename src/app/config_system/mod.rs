@@ -89,9 +89,8 @@ impl ConfigStore {
     /// crate and pass it with:
     /// `include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/config_schema.toml"))`.
     pub fn load_from_schema_str(schema_toml: &str, user_config_path: &str) -> Result<Self> {
-        let schema: ConfigSchema = toml::from_str(schema_toml).map_err(|e| {
-            ConfigError::TomlParse(format!("Failed to parse schema TOML: {}", e))
-        })?;
+        let schema: ConfigSchema = toml::from_str(schema_toml)
+            .map_err(|e| ConfigError::TomlParse(format!("Failed to parse schema TOML: {}", e)))?;
 
         // Verify schema version
         if schema.version != Self::CURRENT_VERSION {
@@ -194,8 +193,7 @@ impl ConfigStore {
         self.values = new_store.values;
         // Don't replace widgets - sync values to existing widgets to preserve animation state
         let keys: Vec<String> = self.values.keys().cloned().collect();
-        for key in keys {
-        }
+        for key in keys {}
         self.dirty = false;
         Ok(())
     }
@@ -546,9 +544,7 @@ impl ConfigStore {
 
     pub fn get_color(&self, key: &str) -> Result<ImColor32> {
         match self.values.get(key) {
-            Some(ConfigValue::Color { r, g, b, a }) => {
-                Ok(ImColor32::from_rgba(*r, *g, *b, *a))
-            }
+            Some(ConfigValue::Color { r, g, b, a }) => Ok(ImColor32::from_rgba(*r, *g, *b, *a)),
             Some(v) => Err(ConfigError::TypeMismatch {
                 key: key.to_string(),
                 expected: "color".to_string(),

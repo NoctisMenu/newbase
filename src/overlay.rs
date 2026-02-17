@@ -3,6 +3,71 @@ use std::time::Instant;
 use device_query::DeviceQuery;
 
 impl<S: 'static + Send + Sync> crate::App<S> {
+    fn draw_baseline_overlay_primitives(
+        &self,
+        ui: &newoverlay::imgui::Ui,
+        draw_list: &newoverlay::imgui::DrawListMut,
+        clear_fullscreen: bool,
+    ) {
+        let [display_w, display_h] = ui.io().display_size;
+
+        if clear_fullscreen {
+            let clear_w = display_w.max(1.0);
+            let clear_h = display_h.max(1.0);
+            draw_list
+                .add_rect([0.0, 0.0], [clear_w, clear_h], [0.0, 0.0, 0.0, 0.0])
+                .filled(true)
+                .build();
+        } else {
+            // Keep at least one guaranteed draw command every normal frame.
+            draw_list
+                .add_rect([0.0, 0.0], [1.0, 1.0], [0.0, 0.0, 0.0, 0.0])
+                .filled(true)
+                .build();
+        }
+
+        // Always emit the semi-transparent white frame so the draw list is non-empty
+        // and consistent even during shutdown frames.
+        let mut frame_max_x = self.window_info.size.0 as f32;
+        let mut frame_max_y = self.window_info.size.1 as f32;
+        if !frame_max_x.is_finite() || frame_max_x <= 64.0 {
+            frame_max_x = display_w.max(65.0);
+        }
+        if !frame_max_y.is_finite() || frame_max_y <= 64.0 {
+            frame_max_y = display_h.max(65.0);
+        }
+
+        draw_list
+            .add_rect(
+                [64.0, 64.0],
+                [frame_max_x, frame_max_y],
+                [1.0, 1.0, 1.0, 0.01],
+            )
+            .build();
+    }
+
+    fn force_clear_overlay_window(&mut self, overlay: &mut newoverlay::Overlay) {
+        self.visible = false;
+        self.debug_lines.clear();
+
+        // Push a couple of fully transparent frames so the last UI frame
+        // does not linger on screen while the process exits.
+        for _ in 0..2 {
+            if !overlay.start_render() {
+                break;
+            }
+
+            overlay.render(|ui| {
+                let draw_list = ui.get_background_draw_list();
+                self.draw_baseline_overlay_primitives(ui, &draw_list, true);
+            });
+
+            unsafe {
+                let _ = windows::Win32::Graphics::Dwm::DwmFlush();
+            }
+        }
+    }
+
     fn initialize_fps_font(&mut self, overlay: &mut newoverlay::Overlay) {
         let mut loaded_font = None;
         let _ = overlay.configure_fonts(|ctx| {
@@ -248,6 +313,7 @@ impl<S: 'static + Send + Sync> crate::App<S> {
 
             if self.exit {
                 log::warn!("Exiting!");
+                self.force_clear_overlay_window(&mut overlay);
                 // Auto-save config on exit
                 if let Err(e) = self.config_store.write().save_if_dirty() {
                     log::error!("Failed to save config on exit: {}", e);
@@ -267,7 +333,6 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 .contains(&device_query::Keycode::Insert)
                 && self.show_time.elapsed().as_millis() > 250
             {
-                println!("Toggling menu visibility...");
                 self.visible = !self.visible;
                 self.show_time = std::time::Instant::now();
             }
@@ -288,23 +353,7 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             // Render UI
             overlay.render(|ui| {
                 let draw_list = ui.get_background_draw_list();
-                // Ensure at least one draw command exists every frame. This avoids an imgui-rs
-                // UB check panic when draw-lists are empty and cmd list pointer is null.
-                draw_list
-                    .add_rect([0.0, 0.0], [1.0, 1.0], [0.0, 0.0, 0.0, 0.0])
-                    .filled(true)
-                    .build();
-
-                draw_list
-                    .add_rect(
-                    [64., 64.],
-                    [
-                        self.window_info.size.0 as f32,
-                        self.window_info.size.1 as f32,
-                    ],
-                    [1.0, 1.0, 1.0, 0.01], // Semi-transparent white
-                )
-                    .build();
+                self.draw_baseline_overlay_primitives(ui, &draw_list, false);
 
                 // Render menu and main loop
                 if self.visible {
