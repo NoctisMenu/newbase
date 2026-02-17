@@ -80,6 +80,9 @@ pub fn custom_builder<S: Send + Sync + 'static>(
         let _ = windows::Win32::System::Console::FreeConsole();
     }
 
+    // Apply focus to the game window once after init completes.
+    focus_game_window_once(window);
+
     log::info!("Entering main app loop!");
     Ok(App::builder(pid, window, time_remaining, state))
 }
@@ -204,6 +207,52 @@ fn wait_for_window(pid: u32, max_retries: u32) -> Result<windowing::Window, Init
     }
 }
 
+fn focus_game_window_once(game_window: windowing::Window) {
+    use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{SetActiveWindow, SetFocus};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, IsIconic, SW_RESTORE,
+        SetForegroundWindow, ShowWindow,
+    };
+
+    unsafe {
+        // Small delay helps avoid racing window creation/startup focus transitions.
+        std::thread::sleep(Duration::from_millis(150));
+
+        if IsIconic(game_window).as_bool() {
+            let _ = ShowWindow(game_window, SW_RESTORE);
+        }
+
+        let fg = GetForegroundWindow();
+        let current_tid = GetCurrentThreadId();
+        let game_tid = GetWindowThreadProcessId(game_window, None);
+        let fg_tid = if !fg.is_invalid() {
+            GetWindowThreadProcessId(fg, None)
+        } else {
+            0
+        };
+
+        if fg_tid != 0 && fg_tid != current_tid {
+            let _ = AttachThreadInput(current_tid, fg_tid, true);
+        }
+        if game_tid != 0 && game_tid != current_tid {
+            let _ = AttachThreadInput(current_tid, game_tid, true);
+        }
+
+        let _ = BringWindowToTop(game_window);
+        let _ = SetActiveWindow(game_window);
+        let _ = SetForegroundWindow(game_window);
+        let _ = SetFocus(Some(game_window));
+
+        if game_tid != 0 && game_tid != current_tid {
+            let _ = AttachThreadInput(current_tid, game_tid, false);
+        }
+        if fg_tid != 0 && fg_tid != current_tid {
+            let _ = AttachThreadInput(current_tid, fg_tid, false);
+        }
+    }
+}
+
 fn spawn_watchdog_thread(_time_remaining: Arc<AtomicI64>, process_name: String) {
     std::thread::spawn(move || {
         loop {
@@ -223,17 +272,29 @@ fn spawn_watchdog_thread(_time_remaining: Arc<AtomicI64>, process_name: String) 
 fn disable_console_decorations() {
     use rand::Rng;
     use windows::Win32::System::Console::{
-        AllocConsole, CONSOLE_SCREEN_BUFFER_INFO, GetConsoleScreenBufferInfo, GetConsoleWindow,
-        GetStdHandle, STD_OUTPUT_HANDLE, SetConsoleScreenBufferSize, SetConsoleTitleW,
+        AllocConsole, CONSOLE_SCREEN_BUFFER_INFO, ENABLE_EXTENDED_FLAGS, ENABLE_INSERT_MODE,
+        ENABLE_QUICK_EDIT_MODE, GetConsoleMode, GetConsoleScreenBufferInfo, GetConsoleWindow,
+        GetStdHandle, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleMode,
+        SetConsoleScreenBufferSize, SetConsoleTitleW,
     };
     use windows::Win32::UI::Controls::ShowScrollBar;
     use windows::Win32::UI::WindowsAndMessaging::{
         GWL_EXSTYLE, GWL_STYLE, HWND_NOTOPMOST, SB_BOTH, SB_HORZ, SB_VERT, SWP_FRAMECHANGED,
-        SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, WS_POPUP, WS_VISIBLE,
+        SWP_NOACTIVATE, SWP_SHOWWINDOW, GetForegroundWindow, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, WS_POPUP, WS_VISIBLE,
     };
 
     unsafe {
+        let previous_foreground = GetForegroundWindow();
         let _ = AllocConsole();
+        if let Ok(stdin) = GetStdHandle(STD_INPUT_HANDLE) {
+            let mut mode = windows::Win32::System::Console::CONSOLE_MODE(0);
+            if GetConsoleMode(stdin, &mut mode).is_ok() {
+                // Prevent accidental console text selection from suspending the process.
+                mode |= ENABLE_EXTENDED_FLAGS;
+                mode &= !(ENABLE_QUICK_EDIT_MODE | ENABLE_INSERT_MODE);
+                let _ = SetConsoleMode(stdin, mode);
+            }
+        }
 
         let mut rng = rand::rng();
         let random_title: String = (0..16)
@@ -283,5 +344,10 @@ fn disable_console_decorations() {
         let _ = ShowScrollBar(hwnd, SB_BOTH, false);
         let _ = ShowScrollBar(hwnd, SB_HORZ, false);
         let _ = ShowScrollBar(hwnd, SB_VERT, false);
+
+        // Immediately restore focus to whatever window was focused before console creation.
+        if !previous_foreground.is_invalid() {
+            let _ = SetForegroundWindow(previous_foreground);
+        }
     }
 }

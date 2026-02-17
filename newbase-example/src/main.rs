@@ -198,9 +198,9 @@ fn main() {
         .expect("Failed to initialize runtime")
         .with_logic(Esp)
         .with_config_schema_str(SCHEMA_TOML, "config.toml")
-        // .with_thread(
-        //     "players",
-        //     |x| cache_players(x)
-        // )
+        .with_thread(
+            "players",
+            cache_players
+        )
         .run();
 }

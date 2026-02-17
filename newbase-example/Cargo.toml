@@ -1,5 +1,5 @@
 [package]
-name = "newbase-app"
+name = "newbase-example"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,7 +8,7 @@ default = ["launch_game"]
 launch_game = []
 
 [dependencies]
-newbase = { path = "../newbase" }
+newbase = { path = ".." }
 memory = {version = "*", git = "https://github.com/NoctisMenu/memory.git", branch = "leakeddrv"}
 windowing = { git = "https://github.com/NoctisMenu/windowing.git" }
 newoverlay = { git = "https://github.com/noctismenu/newoverlay", version = "0.1.0" }
@@ -23,4 +23,6 @@ phf = { version = "0.13.1", features = ["macros"] }
 anyhow = "1.0.101"
 
 [build-dependencies]
-newbase = { path = "../newbase" }
+newbase = { path = ".." }
+
+[workspace]

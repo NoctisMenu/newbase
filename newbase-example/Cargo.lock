@@ -871,7 +871,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "newbase-app"
+name = "newbase-example"
 version = "0.1.0"
 dependencies = [
  "anyhow",

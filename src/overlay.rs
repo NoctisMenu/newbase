@@ -242,9 +242,6 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         log::info!("Overlay initialized successfully");
         // Font + logo are configured together in initialize_logo_texture().
         self.initialize_logo_texture(&mut overlay);
-        unsafe {
-            let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(self.game_window);
-        }
 
         loop {
             let start = std::time::Instant::now();
@@ -312,7 +309,10 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 // Render menu and main loop
                 if self.visible {
                     self.render_menu(ui);
-                    self.menu_intro_elapsed += ui.io().delta_time.max(0.0);
+                    // Clamp intro timeline advancement so first-frame delta spikes
+                    // don't skip the fade-in phase.
+                    let intro_dt = ui.io().delta_time.clamp(0.0, 1.0 / 30.0);
+                    self.menu_intro_elapsed += intro_dt;
                 }
 
                 if self.menu_intro_finished {

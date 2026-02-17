@@ -4,29 +4,35 @@ impl<S: Send + Sync + 'static> crate::App<S> {
     pub fn render_menu(&mut self, ui: &Ui) {
         if !self.menu_intro_finished {
             let elapsed = self.menu_intro_elapsed;
-            const IN_DURATION: f32 = 1.10;
-            const HOLD_DURATION: f32 = 2.00;
-            const OUT_DURATION: f32 = 1.10;
+            const START_DELAY: f32 = 0.75;
+            const ANIM_SCALE: f32 = 2.0 / 3.0;
+            const IN_DURATION: f32 = 1.10 * ANIM_SCALE;
+            const HOLD_DURATION: f32 = 2.00 * ANIM_SCALE;
+            const OUT_DURATION: f32 = 1.10 * ANIM_SCALE;
             const START_SCALE: f32 = 0.72;
             const END_SCALE: f32 = 1.0;
 
-            let total_duration = IN_DURATION + HOLD_DURATION + OUT_DURATION;
+            let total_duration = START_DELAY + IN_DURATION + HOLD_DURATION + OUT_DURATION;
             if elapsed >= total_duration {
                 self.menu_intro_finished = true;
                 return;
             }
+            if elapsed < START_DELAY {
+                return;
+            }
+            let anim_elapsed = elapsed - START_DELAY;
 
             let smoothstep = |t: f32| t * t * (3.0 - 2.0 * t);
             let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
 
-            let (alpha, scale) = if elapsed < IN_DURATION {
-                let t = smoothstep((elapsed / IN_DURATION).clamp(0.0, 1.0));
+            let (alpha, scale) = if anim_elapsed < IN_DURATION {
+                let t = smoothstep((anim_elapsed / IN_DURATION).clamp(0.0, 1.0));
                 (t, lerp(START_SCALE, END_SCALE, t))
-            } else if elapsed < IN_DURATION + HOLD_DURATION {
+            } else if anim_elapsed < IN_DURATION + HOLD_DURATION {
                 (1.0, END_SCALE)
             } else {
                 let t = smoothstep(
-                    ((elapsed - IN_DURATION - HOLD_DURATION) / OUT_DURATION).clamp(0.0, 1.0),
+                    ((anim_elapsed - IN_DURATION - HOLD_DURATION) / OUT_DURATION).clamp(0.0, 1.0),
                 );
                 (1.0 - t, lerp(END_SCALE, START_SCALE, t))
             };
