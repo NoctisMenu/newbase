@@ -1,4 +1,5 @@
 use anyhow::Result;
+use newoverlay::imgui::TextureId;
 use windowing::WindowInfo;
 
 use std::sync::Mutex;
@@ -57,6 +58,13 @@ pub struct FloatingPoint {
     pub velocity: [f32; 2],
 }
 
+pub struct MenuLogo {
+    pub texture_id: TextureId,
+    pub uv_min: [f32; 2],
+    pub uv_max: [f32; 2],
+    pub aspect_ratio: f32,
+}
+
 pub struct App<S> {
     pub pid: u32,
     pub game_pid: u32,
@@ -91,8 +99,13 @@ pub struct App<S> {
     pub true_frametime: Duration,
     pub true_frame_samples: Vec<Duration>,
     pub averaged_true_fps: f32,
+    pub fps_font: Option<newoverlay::imgui::FontId>,
+    pub(crate) debug_lines: Vec<String>,
 
     pub config_store: Arc<parking_lot::RwLock<config_system::ConfigStore>>,
+    pub menu_logo: Option<MenuLogo>,
+    pub menu_intro_elapsed: f32,
+    pub menu_intro_finished: bool,
 }
 
 // Builder pattern for easier setup
@@ -132,6 +145,8 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
             true_frametime: Duration::from_secs(1),
             true_frame_samples: Vec::new(),
             averaged_true_fps: 0.0,
+            fps_font: None,
+            debug_lines: Vec::new(),
             config_store: Arc::new(parking_lot::RwLock::new(
                 config_system::ConfigStore::load_with_fallback(),
             )),
@@ -140,6 +155,9 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
             threads_performance: HashMap::new(),
             logic_systems: Vec::new(),
             is_ticking_logic: false,
+            menu_logo: None,
+            menu_intro_elapsed: 0.0,
+            menu_intro_finished: false,
         };
         Self { app }
     }
@@ -173,6 +191,42 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
     pub fn run(mut self) {
         self.app.run();
     }
+
+    /// Override config loading using a schema TOML string.
+    ///
+    /// Useful for binaries that embed their own schema with:
+    /// `include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/config_schema.toml"))`
+    pub fn with_config_schema_str(mut self, schema_toml: &str, user_config_path: &str) -> Self {
+        match config_system::ConfigStore::load_from_schema_str(schema_toml, user_config_path) {
+            Ok(store) => {
+                self.app.config_store = Arc::new(parking_lot::RwLock::new(store));
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to load config from provided schema string: {}. Keeping existing config store.",
+                    e
+                );
+            }
+        }
+        self
+    }
+
+    /// Override config loading using a schema file path.
+    pub fn with_config_schema_path(mut self, schema_path: &str, user_config_path: &str) -> Self {
+        match config_system::ConfigStore::load_from_schema_path(schema_path, user_config_path) {
+            Ok(store) => {
+                self.app.config_store = Arc::new(parking_lot::RwLock::new(store));
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to load config from schema path '{}': {}. Keeping existing config store.",
+                    schema_path,
+                    e
+                );
+            }
+        }
+        self
+    }
 }
 
 impl<S: Send + Sync + 'static> App<S> {
@@ -184,6 +238,13 @@ impl<S: Send + Sync + 'static> App<S> {
         state: S,
     ) -> AppBuilder<S> {
         AppBuilder::new(game_pid, game_window, time_remaining, state)
+    }
+
+    /// Queue debug text for this frame.
+    ///
+    /// Text is rendered by the overlay under the FPS counters and cleared each frame.
+    pub fn debug_text(&mut self, text: impl Into<String>) {
+        self.debug_lines.push(text.into());
     }
 
     // === Logic System Management ===

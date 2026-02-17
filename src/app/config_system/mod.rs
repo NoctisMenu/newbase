@@ -9,7 +9,7 @@ pub use schema::{ConfigSchema, ConfigSection, FieldMetadata, FieldSchema, FieldT
 
 //use crate::widgets::{Checkbox, SmoothSlider, ToggleSwitch};
 use newoverlay::imgui::ImColor32;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -66,15 +66,31 @@ impl ConfigStore {
 
     /// Load config from schema and user overrides
     pub fn load() -> Result<Self> {
-        Self::load_from_paths(Self::USER_CONFIG_PATH)
+        Self::load_from_schema_path(Self::SCHEMA_PATH, Self::USER_CONFIG_PATH)
     }
 
-    /// Load with explicit paths (useful for testing)
+    /// Load with explicit user config path and default schema path.
+    ///
+    /// Prefer `load_from_schema_path` or `load_from_schema_str` when the schema
+    /// lives outside the library crate (e.g. in a consuming binary crate).
     pub fn load_from_paths(user_config_path: &str) -> Result<Self> {
-        // Load schema from embedded string (compile-time inclusion)
-        const SCHEMA_TOML: &str = include_str!("../../../app/config_schema.toml");
-        let schema: ConfigSchema = toml::from_str(SCHEMA_TOML).map_err(|e| {
-            ConfigError::TomlParse(format!("Failed to parse embedded schema: {}", e))
+        Self::load_from_schema_path(Self::SCHEMA_PATH, user_config_path)
+    }
+
+    /// Load config from a schema file path and user config path.
+    pub fn load_from_schema_path(schema_path: &str, user_config_path: &str) -> Result<Self> {
+        let schema_toml = std::fs::read_to_string(schema_path)?;
+        Self::load_from_schema_str(&schema_toml, user_config_path)
+    }
+
+    /// Load config from a provided schema TOML string and user config path.
+    ///
+    /// This is useful for binaries that keep `config_schema.toml` in their own
+    /// crate and pass it with:
+    /// `include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/config_schema.toml"))`.
+    pub fn load_from_schema_str(schema_toml: &str, user_config_path: &str) -> Result<Self> {
+        let schema: ConfigSchema = toml::from_str(schema_toml).map_err(|e| {
+            ConfigError::TomlParse(format!("Failed to parse schema TOML: {}", e))
         })?;
 
         // Verify schema version
@@ -148,18 +164,27 @@ impl ConfigStore {
             Ok(store) => store,
             Err(e) => {
                 log::error!("Failed to load config: {}. Using defaults.", e);
-                Self::from_defaults()
+                Self::empty_store(Self::USER_CONFIG_PATH)
             }
         }
     }
 
     /// Create config from schema defaults only
     fn from_defaults() -> Self {
-        match Self::load_from_paths("non_existent.toml") {
-            Ok(store) => store,
-            Err(e) => {
-                panic!("Failed to load schema: {}. Cannot continue.", e);
-            }
+        Self::empty_store(Self::USER_CONFIG_PATH)
+    }
+
+    fn empty_store(user_config_path: &str) -> Self {
+        Self {
+            schema: ConfigSchema {
+                version: Self::CURRENT_VERSION,
+                sections: HashMap::new(),
+            },
+            values: HashMap::new(),
+            widgets: HashMap::new(),
+            user_config_path: PathBuf::from(user_config_path),
+            dirty: false,
+            highlighted_field: None,
         }
     }
 

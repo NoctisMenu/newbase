@@ -10,9 +10,6 @@ use windows_strings::s;
 
 use crate::{App, AppBuilder};
 
-const PROCESS_NAME: &str = "deadlock.exe";
-#[cfg(feature = "launch_game")]
-const APP_ID: u32 = 1422450;
 const MAX_RETRIES: u32 = 20;
 const RETRY_DELAY: Duration = Duration::from_millis(5000);
 
@@ -20,7 +17,7 @@ const RETRY_DELAY: Duration = Duration::from_millis(5000);
 pub enum InitError {
     #[error("failed to find game process '{process_name}' after {retries} retries")]
     ProcessNotFound {
-        process_name: &'static str,
+        process_name: String,
         retries: u32,
     },
     #[error("failed to find game window for pid {pid} after {retries} retries")]
@@ -34,13 +31,18 @@ pub enum InitError {
 /// Initialize runtime, resolve process/window/driver state, and return a ready AppBuilder.
 ///
 /// After this returns, users only need to call `.with_logic(...)` and `.run()`.
-pub fn custom_builder<S: Send + Sync + 'static>(state: S) -> Result<AppBuilder<S>, InitError> {
+pub fn custom_builder<S: Send + Sync + 'static>(
+    state: S,
+    game_name: impl Into<String>,
+    app_id: Option<u32>,
+) -> Result<AppBuilder<S>, InitError> {
     colog::init();
 
     #[cfg(debug_assertions)]
     setup_panic_hook();
 
     disable_console_decorations();
+    let game_name = game_name.into();
 
     let time_remaining = Arc::new(AtomicI64::new(
         std::env::var("WINVER_ID")
@@ -50,13 +52,20 @@ pub fn custom_builder<S: Send + Sync + 'static>(state: S) -> Result<AppBuilder<S
     ));
 
     #[cfg(feature = "launch_game")]
-    if memory::driver::return_pid(PROCESS_NAME).is_none() {
-        log::info!("Launching game...");
-        launch_game();
+    if memory::driver::return_pid(&game_name).is_none() {
+        if let Some(app_id) = app_id {
+            log::info!("Launching game...");
+            launch_game(app_id);
+        } else {
+            log::info!("Game process not found and no Steam app id provided; waiting for process...");
+        }
     }
 
-    let pid = wait_for_pid(PROCESS_NAME, MAX_RETRIES)?;
-    spawn_watchdog_thread(time_remaining.clone());
+    #[cfg(not(feature = "launch_game"))]
+    let _ = app_id;
+
+    let pid = wait_for_pid(&game_name, MAX_RETRIES)?;
+    spawn_watchdog_thread(time_remaining.clone(), game_name);
     let window = wait_for_window(pid, MAX_RETRIES)?;
 
     copy_driver()?;
@@ -97,9 +106,9 @@ fn setup_panic_hook() {
 }
 
 #[cfg(feature = "launch_game")]
-fn launch_game() {
+fn launch_game(app_id: u32) {
     use std::os::windows::process::CommandExt;
-    let steam_url = format!("steam://rungameid/{}", APP_ID);
+    let steam_url = format!("steam://rungameid/{}", app_id);
     let _ = Command::new("cmd")
         .args(["/C", "start", "", &steam_url])
         .creation_flags(0x08000000)
@@ -149,7 +158,7 @@ fn copy_driver() -> Result<(), InitError> {
     Ok(())
 }
 
-fn wait_for_pid(process_name: &'static str, max_retries: u32) -> Result<u32, InitError> {
+fn wait_for_pid(process_name: &str, max_retries: u32) -> Result<u32, InitError> {
     let mut retries = 0;
     loop {
         match memory::driver::return_pid(process_name) {
@@ -161,7 +170,7 @@ fn wait_for_pid(process_name: &'static str, max_retries: u32) -> Result<u32, Ini
                 log::warn!("Failed to find game process!");
                 if retries >= max_retries {
                     return Err(InitError::ProcessNotFound {
-                        process_name,
+                        process_name: process_name.to_string(),
                         retries: max_retries,
                     });
                 }
@@ -195,10 +204,10 @@ fn wait_for_window(pid: u32, max_retries: u32) -> Result<windowing::Window, Init
     }
 }
 
-fn spawn_watchdog_thread(_time_remaining: Arc<AtomicI64>) {
+fn spawn_watchdog_thread(_time_remaining: Arc<AtomicI64>, process_name: String) {
     std::thread::spawn(move || {
         loop {
-            if memory::driver::return_pid(PROCESS_NAME).is_none() {
+            if memory::driver::return_pid(&process_name).is_none() {
                 std::process::exit(0);
             }
             #[cfg(not(debug_assertions))]
@@ -219,8 +228,8 @@ fn disable_console_decorations() {
     };
     use windows::Win32::UI::Controls::ShowScrollBar;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GWL_STYLE, HWND_TOP, SB_BOTH, SB_HORZ, SB_VERT, SWP_FRAMECHANGED,
-        SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, WS_POPUP, WS_VISIBLE,
+        GWL_EXSTYLE, GWL_STYLE, HWND_NOTOPMOST, SB_BOTH, SB_HORZ, SB_VERT, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, WS_POPUP, WS_VISIBLE,
     };
 
     unsafe {
@@ -254,12 +263,12 @@ fn disable_console_decorations() {
         let _ = SetWindowLongPtrW(hwnd, GWL_EXSTYLE, 0);
         let _ = SetWindowPos(
             hwnd,
-            Some(HWND_TOP),
+            Some(HWND_NOTOPMOST),
             100,
             100,
             800,
             600,
-            SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+            SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE,
         );
 
         let stdout = GetStdHandle(STD_OUTPUT_HANDLE).unwrap();

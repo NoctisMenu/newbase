@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -72,7 +72,7 @@ pub enum WidgetType {
 }
 
 // Custom deserializer to support both simple strings and detailed objects
-impl<'de> Deserialize<'de> for WidgetType {
+impl<'de> serde::Deserialize<'de> for WidgetType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

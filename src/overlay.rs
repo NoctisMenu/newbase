@@ -1,10 +1,233 @@
-﻿use std::time::Instant;
+use std::time::Instant;
 
 use device_query::DeviceQuery;
-use newoverlay::imgui::{Condition, DrawList, FontSource, Window};
-use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, WDA_NONE, WS_POPUP};
 
 impl<S: 'static + Send + Sync> crate::App<S> {
+    fn initialize_fps_font(&mut self, overlay: &mut newoverlay::Overlay) {
+        let mut loaded_font = None;
+        let _ = overlay.configure_fonts(|ctx| {
+            let mut fonts = ctx.fonts();
+            loaded_font = Some(fonts.add_font(&[newoverlay::imgui::FontSource::TtfData {
+                data: include_bytes!("../resources/tahoma.ttf"),
+                size_pixels: 22.0,
+                config: Some(newoverlay::imgui::FontConfig {
+                    // Keep glyphs on the pixel grid and avoid heavy subpixel blending.
+                    pixel_snap_h: true,
+                    oversample_h: 1,
+                    oversample_v: 1,
+                    // Slightly embolden the glyph coverage.
+                    rasterizer_multiply: 1.30,
+                    ..Default::default()
+                }),
+            }]));
+        });
+
+        if loaded_font.is_none() {
+            log::warn!("Failed to load resources/tahoma.ttf for FPS counter");
+        }
+        self.fps_font = loaded_font;
+    }
+
+    fn initialize_logo_texture(&mut self, overlay: &mut newoverlay::Overlay) {
+        let Ok(logo) = image::load_from_memory(include_bytes!("../resources/logo.png")) else {
+            log::warn!("Failed to decode resources/logo.png; menu intro logo disabled");
+            self.menu_logo = None;
+            return;
+        };
+
+        let mut logo = logo.to_rgba8();
+        let (mut logo_w, mut logo_h) = logo.dimensions();
+        if logo_w == 0 || logo_h == 0 {
+            log::warn!("resources/logo.png has invalid dimensions; menu intro logo disabled");
+            self.menu_logo = None;
+            return;
+        }
+
+        const MAX_ATLAS_LOGO_DIM: u32 = 512;
+        if logo_w > MAX_ATLAS_LOGO_DIM || logo_h > MAX_ATLAS_LOGO_DIM {
+            let scale = (MAX_ATLAS_LOGO_DIM as f32 / logo_w as f32)
+                .min(MAX_ATLAS_LOGO_DIM as f32 / logo_h as f32);
+            let new_w = ((logo_w as f32 * scale).round() as u32).max(1);
+            let new_h = ((logo_h as f32 * scale).round() as u32).max(1);
+            logo = image::imageops::resize(
+                &logo,
+                new_w,
+                new_h,
+                image::imageops::FilterType::Lanczos3,
+            );
+            logo_w = new_w;
+            logo_h = new_h;
+        }
+
+        let logo_pixels = logo.into_raw();
+        let mut uv_min = [0.0_f32; 2];
+        let mut uv_max = [0.0_f32; 2];
+        let mut loaded_font = None;
+        let mut packed_ok = false;
+        let upload_ok = overlay.configure_fonts(|ctx| unsafe {
+            let mut fonts = ctx.fonts();
+            loaded_font = Some(fonts.add_font(&[newoverlay::imgui::FontSource::TtfData {
+                data: include_bytes!("../resources/tahoma.ttf"),
+                size_pixels: 22.0,
+                config: Some(newoverlay::imgui::FontConfig {
+                    pixel_snap_h: true,
+                    oversample_h: 1,
+                    oversample_v: 1,
+                    rasterizer_multiply: 1.30,
+                    ..Default::default()
+                }),
+            }]));
+
+            // The font atlas is already built by the renderer at this point.
+            // Clear texture data so custom rect packing can run again.
+            fonts.clear_tex_data();
+            if fonts.tex_desired_width < 2048 {
+                fonts.tex_desired_width = 2048;
+            }
+
+            let atlas = (&mut *fonts as *mut _) as *mut newoverlay::imgui::sys::ImFontAtlas;
+            let rect_index = newoverlay::imgui::sys::ImFontAtlas_AddCustomRectRegular(
+                atlas,
+                logo_w as i32,
+                logo_h as i32,
+            );
+            if rect_index < 0 {
+                return;
+            }
+
+            let _ = fonts.build_rgba32_texture();
+
+            let mut atlas_pixels = std::ptr::null_mut();
+            let mut atlas_w = 0_i32;
+            let mut atlas_h = 0_i32;
+            let mut bytes_per_pixel = 0_i32;
+            newoverlay::imgui::sys::ImFontAtlas_GetTexDataAsRGBA32(
+                atlas,
+                &mut atlas_pixels,
+                &mut atlas_w,
+                &mut atlas_h,
+                &mut bytes_per_pixel,
+            );
+
+            if atlas_pixels.is_null() || bytes_per_pixel != 4 || atlas_w <= 0 || atlas_h <= 0 {
+                return;
+            }
+
+            let rect = newoverlay::imgui::sys::ImFontAtlas_GetCustomRectByIndex(atlas, rect_index);
+            if rect.is_null() || !newoverlay::imgui::sys::ImFontAtlasCustomRect_IsPacked(rect) {
+                return;
+            }
+
+            let rect = &*rect;
+            let rect_x = rect.X as usize;
+            let rect_y = rect.Y as usize;
+            let atlas_w = atlas_w as usize;
+            let logo_w = logo_w as usize;
+            let logo_h = logo_h as usize;
+            let atlas_pixels = atlas_pixels as *mut u8;
+
+            for row in 0..logo_h {
+                let src_offset = row * logo_w * 4;
+                let dst_offset = ((rect_y + row) * atlas_w + rect_x) * 4;
+                let src_row =
+                    std::slice::from_raw_parts(logo_pixels.as_ptr().add(src_offset), logo_w * 4);
+                let dst_row =
+                    std::slice::from_raw_parts_mut(atlas_pixels.add(dst_offset), logo_w * 4);
+
+                // DX9 path in this renderer expects BGRA ordering.
+                for px in 0..logo_w {
+                    let i = px * 4;
+                    dst_row[i] = src_row[i + 2];
+                    dst_row[i + 1] = src_row[i + 1];
+                    dst_row[i + 2] = src_row[i];
+                    dst_row[i + 3] = src_row[i + 3];
+                }
+            }
+
+            let mut uv0 = newoverlay::imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
+            let mut uv1 = newoverlay::imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
+            newoverlay::imgui::sys::ImFontAtlas_CalcCustomRectUV(atlas, rect, &mut uv0, &mut uv1);
+            uv_min = [uv0.x, uv0.y];
+            uv_max = [uv1.x, uv1.y];
+            packed_ok = true;
+        });
+
+        if loaded_font.is_none() {
+            log::warn!("Failed to load resources/tahoma.ttf for FPS counter");
+        }
+        self.fps_font = loaded_font;
+
+        if !upload_ok || !packed_ok {
+            log::warn!("Failed to prepare logo texture in ImGui atlas; menu intro logo disabled");
+            self.menu_logo = None;
+            return;
+        }
+
+        self.menu_logo = Some(crate::app::MenuLogo {
+            texture_id: newoverlay::imgui::TextureId::from(!0usize),
+            uv_min,
+            uv_max,
+            aspect_ratio: logo_w as f32 / logo_h as f32,
+        });
+    }
+
+    fn draw_perf_and_debug(
+        &self,
+        ui: &newoverlay::imgui::Ui,
+        draw_list: &newoverlay::imgui::DrawListMut,
+    ) {
+        draw_list.add_text(
+            [10.0, 250.0],
+            [1.0, 1.0, 1.0, 1.0],
+            format!("FPS: {:.0}", self.averaged_fps),
+        );
+        draw_list.add_text(
+            [10.0, 278.0],
+            [0.59, 0.59, 0.59, 1.0],
+            format!("True FPS: {:.0}", self.averaged_true_fps),
+        );
+
+        if self.debug_lines.is_empty() {
+            return;
+        }
+
+        const DEBUG_X: f32 = 10.0;
+        const DEBUG_Y: f32 = 312.0;
+        const DEBUG_LINE_GAP: f32 = 4.0;
+        const DEBUG_PADDING_X: f32 = 8.0;
+        const DEBUG_PADDING_Y: f32 = 6.0;
+
+        let mut max_width = 0.0_f32;
+        let mut total_height = 0.0_f32;
+        for (idx, line) in self.debug_lines.iter().enumerate() {
+            let [w, h] = ui.calc_text_size(line);
+            max_width = max_width.max(w);
+            total_height += h;
+            if idx + 1 < self.debug_lines.len() {
+                total_height += DEBUG_LINE_GAP;
+            }
+        }
+
+        draw_list
+            .add_rect(
+                [DEBUG_X - DEBUG_PADDING_X, DEBUG_Y - DEBUG_PADDING_Y],
+                [
+                    DEBUG_X + max_width + DEBUG_PADDING_X,
+                    DEBUG_Y + total_height + DEBUG_PADDING_Y,
+                ],
+                [0.0, 0.0, 0.0, 0.70],
+            )
+            .filled(true)
+            .rounding(4.0)
+            .build();
+
+        let mut y = DEBUG_Y;
+        for line in &self.debug_lines {
+            draw_list.add_text([DEBUG_X, y], [1.0, 1.0, 1.0, 1.0], line);
+            y += ui.calc_text_size(line)[1] + DEBUG_LINE_GAP;
+        }
+    }
+
     pub fn run(&mut self) {
         let mut overlay = loop {
             match newoverlay::Overlay::new() {
@@ -17,8 +240,11 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         };
 
         log::info!("Overlay initialized successfully");
-
-        let mut frame_count = 0;
+        // Font + logo are configured together in initialize_logo_texture().
+        self.initialize_logo_texture(&mut overlay);
+        unsafe {
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(self.game_window);
+        }
 
         loop {
             let start = std::time::Instant::now();
@@ -55,9 +281,7 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             // Set window size to match game window size (x axis+1 to avoid glfw passthrough blackout bug)
             // Cache window info updates to ~10Hz to avoid expensive Windows API calls every frame
             if self.last_fps_update.elapsed().as_millis() >= 100 {
-                self.window_info = windowing::get_window_info(self.game_window)
-                    .unwrap()
-                    .unwrap();
+                self.window_info = windowing::get_window_info(self.game_window).unwrap().unwrap();
             }
 
             if !overlay.start_render() {
@@ -67,34 +291,43 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             // Render UI
             overlay.render(|ui| {
                 let draw_list = ui.get_background_draw_list();
-                let _ = draw_list.add_rect(
+                // Ensure at least one draw command exists every frame. This avoids an imgui-rs
+                // UB check panic when draw-lists are empty and cmd list pointer is null.
+                draw_list
+                    .add_rect([0.0, 0.0], [1.0, 1.0], [0.0, 0.0, 0.0, 0.0])
+                    .filled(true)
+                    .build();
+
+                draw_list
+                    .add_rect(
                     [64., 64.],
                     [
-                        self.window_info.size.0 as f32 - 64.,
-                        self.window_info.size.1 as f32 - 64.,
+                        self.window_info.size.0 as f32,
+                        self.window_info.size.1 as f32,
                     ],
-                    [1.0, 1.0, 1.0, 0.5], // Semi-transparent white
-                );
+                    [1.0, 1.0, 1.0, 0.01], // Semi-transparent white
+                )
+                    .build();
 
                 // Render menu and main loop
                 if self.visible {
                     self.render_menu(ui);
+                    self.menu_intro_elapsed += ui.io().delta_time.max(0.0);
                 }
 
-                self.tick_logic(ui,&draw_list);
+                if self.menu_intro_finished {
+                    self.tick_logic(ui, &draw_list);
 
-                // Display FPS counters
-                draw_list.add_text(
-                    [10.0, 250.0],
-                    [1.0, 1.0, 1.0, 1.0], // White
-                    format!("FPS: {:.0}", self.averaged_fps),
-                );
+                    if let Some(font) = self.fps_font {
+                        let _font = ui.push_font(font);
+                        self.draw_perf_and_debug(ui, &draw_list);
+                    } else {
+                        self.draw_perf_and_debug(ui, &draw_list);
+                    }
+                }
 
-                draw_list.add_text(
-                    [10.0, 278.0],
-                    [0.59, 0.59, 0.59, 1.0], // Gray (150/255 = 0.59)
-                    format!("True FPS: {:.0}", self.averaged_true_fps),
-                );
+                // Debug text is transient by design; callers should re-submit each frame.
+                self.debug_lines.clear();
             });
 
             // Measure true frametime BEFORE DwmFlush (no vsync wait)
