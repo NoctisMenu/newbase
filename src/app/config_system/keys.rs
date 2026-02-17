@@ -1,11 +1,7 @@
 // Auto-generated config key constants
-// DO NOT EDIT - Generated from config_schema.toml by build.rs
+// DO NOT EDIT - Generated from config_schema.toml
 //
-// This file is automatically regenerated whenever you modify config_schema.toml
-// To add a new config key:
-//   1. Add the field to config_schema.toml
-//   2. Run `cargo build` - the constant will be auto-generated here
-//   3. Use it like: config_store.get_bool(keys::YOUR_NEW_KEY)
+// Regenerate via crate::app::config_system::codegen::regenerate_generated_files()
 
 
 // aim section

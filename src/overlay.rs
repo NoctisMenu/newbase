@@ -1,10 +1,10 @@
 ﻿use std::time::Instant;
 
 use device_query::DeviceQuery;
-use newoverlay::imgui::{Condition, FontSource, Window};
+use newoverlay::imgui::{Condition, DrawList, FontSource, Window};
 use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, WDA_NONE, WS_POPUP};
 
-impl crate::App {
+impl<S: 'static + Send + Sync> crate::App<S> {
     pub fn run(&mut self) {
         let mut overlay = loop {
             match newoverlay::Overlay::new() {
@@ -80,7 +80,8 @@ impl crate::App {
                 if self.visible {
                     self.render_menu(ui);
                 }
-                self.main_loop(ui, &draw_list);
+
+                self.tick_logic(ui,&draw_list);
 
                 // Display FPS counters
                 draw_list.add_text(
@@ -94,37 +95,6 @@ impl crate::App {
                     [0.59, 0.59, 0.59, 1.0], // Gray (150/255 = 0.59)
                     format!("True FPS: {:.0}", self.averaged_true_fps),
                 );
-
-                #[cfg(debug_assertions)]
-                {
-                    // Display thread performance
-                    let mut y_offset = 296.0;
-
-                    for (thread_name, frametime) in self.threads_status() {
-                        let fps = 1.0 / frametime;
-                        let text = format!(
-                            "{}: {:.0} fps ({:.2}ms)",
-                            thread_name,
-                            fps,
-                            frametime * 1000.0
-                        );
-
-                        // Draw black shadow for better readability (offset by 1 pixel)
-                        draw_list.add_text(
-                            [11.0, y_offset + 1.0],
-                            [0.0, 0.0, 0.0, 0.5], // Semi-transparent black shadow
-                            &text,
-                        );
-
-                        // Draw actual text
-                        draw_list.add_text(
-                            [10.0, y_offset],
-                            [0.59, 0.59, 0.59, 1.0], // Gray (150/255 = 0.59)
-                            text,
-                        );
-                        y_offset += 18.0;
-                    }
-                }
             });
 
             // Measure true frametime BEFORE DwmFlush (no vsync wait)

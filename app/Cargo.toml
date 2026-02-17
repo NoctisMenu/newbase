@@ -1,0 +1,22 @@
+[package]
+name = "newbase-app"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["launch_game"]
+launch_game = []
+
+[dependencies]
+newbase = { path = ".." }
+memory = {version = "*", git = "https://github.com/NoctisMenu/memory.git", branch = "leakeddrv"}
+windowing = { git = "https://github.com/NoctisMenu/windowing.git" }
+newoverlay = { git = "https://github.com/noctismenu/newoverlay", version = "0.1.0" }
+windows-strings = "0.5.0"
+windows = { version = "0.62.0", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_System_Console", "Win32_UI_Controls", "Win32_UI_Shell","Win32_Graphics_Dwm"] }
+rand = "0.9.2"
+colog = "1.4.0"
+log = "0.4.28"
+
+[build-dependencies]
+newbase = { path = ".." }

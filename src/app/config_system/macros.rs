@@ -1,5 +1,6 @@
 /// Auto-generated config access macros
-/// DO NOT EDIT - Generated from config_schema.toml by build.rs
+/// DO NOT EDIT - Generated from config_schema.toml
+/// Regenerate via crate::app::config_system::codegen::regenerate_generated_files()
 /// Get a config value by field name string
 ///
 /// # Examples

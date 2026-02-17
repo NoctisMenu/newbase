@@ -5,9 +5,6 @@ use std::sync::Mutex;
 
 pub mod config_system;
 mod gui;
-mod logic;
-
-use crate::{DoubleBuffer, Player};
 use windows::Win32::Foundation::HWND;
 
 use newoverlay::Overlay;
@@ -51,7 +48,7 @@ pub trait LogicSystem<S>: Send {
         std::any::type_name::<Self>()
     }
 
-    fn tick(&mut self, app: &mut App<S>, ui: &newoverlay::imgui::Ui);
+    fn tick(&self, app: &mut App<S>, ui: &newoverlay::imgui::Ui, draw_list: &newoverlay::imgui::DrawListMut);
 }
 
 #[derive(PartialEq)]
@@ -84,6 +81,7 @@ pub struct App<S> {
 
     // Logic systems
     logic_systems: Vec<Box<dyn LogicSystem<S>>>,
+    is_ticking_logic: bool,
 
     // FPS tracking
     pub frametime: Duration,
@@ -141,6 +139,7 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
             join_handles: HashMap::new(),
             threads_performance: HashMap::new(),
             logic_systems: Vec::new(),
+            is_ticking_logic: false,
         };
         Self { app }
     }
@@ -163,12 +162,6 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
         L: LogicSystem<S> + 'static,
     {
         self.app.add_logic(system);
-        self
-    }
-
-    /// Register default threads (from threads module)
-    pub fn with_default_threads(mut self) -> Self {
-        self.app.spawn_all_threads();
         self
     }
 
@@ -195,25 +188,36 @@ impl<S: Send + Sync + 'static> App<S> {
 
     // === Logic System Management ===
 
-    /// Add a logic system at runtime
-    pub fn add_logic<L>(&mut self, system: L)
+    /// Register a logic system (builder-only).
+    fn add_logic<L>(&mut self, system: L)
     where
         L: LogicSystem<S> + 'static,
     {
+        assert!(
+            !self.is_ticking_logic,
+            "add_logic() during tick_logic() is not supported"
+        );
         self.logic_systems.push(Box::new(system));
     }
 
     /// Run all logic systems (called each frame)
-    pub fn tick_logic(&mut self, ui: &newoverlay::imgui::Ui) {
-        for system in &mut self.logic_systems {
-            system.tick(self, ui);
+    pub fn tick_logic(&mut self, ui: &newoverlay::imgui::Ui, draw_list: &newoverlay::imgui::DrawListMut) {
+        self.is_ticking_logic = true;
+        // Move out only the Vec header (ptr/len/cap), not the boxed systems.
+        let systems = std::mem::take(&mut self.logic_systems);
+
+        for system in &systems {
+            system.tick(self, ui, draw_list);
         }
+
+        self.logic_systems = systems;
+        self.is_ticking_logic = false;
     }
 
     // === Thread Management ===
 
-    /// Spawn a new thread at runtime
-    pub fn spawn_thread<F>(
+    /// Register/spawn a managed thread (builder-only).
+    fn spawn_thread<F>(
         &mut self,
         thread_name: impl Into<String>,
         mut task: F,
@@ -318,20 +322,5 @@ impl<S: Send + Sync + 'static> App<S> {
             }
         }
         true
-    }
-}
-
-impl<S> Drop for App<S> {
-    fn drop(&mut self) {
-        self.stop_all_threads();
-    }
-}
-
-// For apps that don't need custom state
-impl App<()> {
-    pub fn start(game_pid: u32, game_window: windowing::Window, time_remaining: Arc<AtomicI64>) {
-        App::builder(game_pid, game_window, time_remaining, ())
-            .with_default_threads()
-            .run();
     }
 }

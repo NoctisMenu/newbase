@@ -1,3 +1,4 @@
+pub mod codegen;
 mod error;
 pub mod keys;
 pub mod macros;
@@ -59,7 +60,7 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
-    const SCHEMA_PATH: &'static str = "config_schema.toml";
+    const SCHEMA_PATH: &'static str = "app/config_schema.toml";
     const USER_CONFIG_PATH: &'static str = "config.toml";
     const CURRENT_VERSION: u32 = 1;
 
@@ -71,7 +72,7 @@ impl ConfigStore {
     /// Load with explicit paths (useful for testing)
     pub fn load_from_paths(user_config_path: &str) -> Result<Self> {
         // Load schema from embedded string (compile-time inclusion)
-        const SCHEMA_TOML: &str = include_str!("../../../config_schema.toml");
+        const SCHEMA_TOML: &str = include_str!("../../../app/config_schema.toml");
         let schema: ConfigSchema = toml::from_str(SCHEMA_TOML).map_err(|e| {
             ConfigError::TomlParse(format!("Failed to parse embedded schema: {}", e))
         })?;

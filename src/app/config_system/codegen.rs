@@ -1,28 +1,61 @@
 use std::fs;
 use std::path::Path;
 
-fn generate_config_keys() {
-    // Tell cargo to rerun if config_schema.toml changes
-    println!("cargo:rerun-if-changed=config_schema.toml");
+use anyhow::{Context, Result};
 
-    // Read and parse the schema TOML
-    let schema_content =
-        fs::read_to_string("config_schema.toml").expect("Failed to read config_schema.toml");
+const DEFAULT_SCHEMA_PATH: &str = "app/config_schema.toml";
+const DEFAULT_KEYS_OUTPUT_PATH: &str = "src/app/config_system/keys.rs";
+const DEFAULT_MACROS_OUTPUT_PATH: &str = "src/app/config_system/macros.rs";
 
-    let schema: toml::Value =
-        toml::from_str(&schema_content).expect("Failed to parse config_schema.toml");
+/// Regenerate generated config source files using the default project paths.
+pub fn regenerate_generated_files() -> Result<()> {
+    regenerate_generated_files_from_paths(
+        DEFAULT_SCHEMA_PATH,
+        DEFAULT_KEYS_OUTPUT_PATH,
+        DEFAULT_MACROS_OUTPUT_PATH,
+    )
+}
 
-    // Generate the keys code
+/// Regenerate `keys.rs` and `macros.rs` from a schema path.
+pub fn regenerate_generated_files_from_paths(
+    schema_path: impl AsRef<Path>,
+    keys_output_path: impl AsRef<Path>,
+    macros_output_path: impl AsRef<Path>,
+) -> Result<()> {
+    let schema_content = fs::read_to_string(schema_path.as_ref()).with_context(|| {
+        format!(
+            "Failed to read schema file at '{}'",
+            schema_path.as_ref().display()
+        )
+    })?;
+
+    let schema: toml::Value = toml::from_str(&schema_content).context("Failed to parse schema TOML")?;
+
+    let keys_output = generate_keys_source(&schema);
+    let macros_output = generate_macros_source(&schema);
+
+    fs::write(keys_output_path.as_ref(), keys_output).with_context(|| {
+        format!(
+            "Failed to write keys output file at '{}'",
+            keys_output_path.as_ref().display()
+        )
+    })?;
+
+    fs::write(macros_output_path.as_ref(), macros_output).with_context(|| {
+        format!(
+            "Failed to write macros output file at '{}'",
+            macros_output_path.as_ref().display()
+        )
+    })?;
+
+    Ok(())
+}
+
+fn generate_keys_source(schema: &toml::Value) -> String {
     let mut output = String::from("// Auto-generated config key constants\n");
-    output.push_str("// DO NOT EDIT - Generated from config_schema.toml by build.rs\n");
+    output.push_str("// DO NOT EDIT - Generated from config_schema.toml\n");
     output.push_str("//\n");
-    output.push_str(
-        "// This file is automatically regenerated whenever you modify config_schema.toml\n",
-    );
-    output.push_str("// To add a new config key:\n");
-    output.push_str("//   1. Add the field to config_schema.toml\n");
-    output.push_str("//   2. Run `cargo build` - the constant will be auto-generated here\n");
-    output.push_str("//   3. Use it like: config_store.get_bool(keys::YOUR_NEW_KEY)\n");
+    output.push_str("// Regenerate via crate::app::config_system::codegen::regenerate_generated_files()\n");
     output.push_str("\n");
 
     if let Some(sections) = schema.get("sections").and_then(|s| s.as_table()) {
@@ -31,7 +64,6 @@ fn generate_config_keys() {
 
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for field_name in fields.keys() {
-                    // Convert field_name to SCREAMING_SNAKE_CASE for the constant name
                     let const_name = field_name.to_uppercase();
                     let key_value = format!("{}.{}", section_name, field_name);
 
@@ -44,26 +76,16 @@ fn generate_config_keys() {
         }
     }
 
-    // Write to src/app/config_system/keys.rs directly
-    let dest_path = Path::new("src/app/config_system/keys.rs");
-    fs::write(&dest_path, output).expect("Failed to write keys.rs");
+    output
 }
 
-fn generate_config_macros() {
-    // Tell cargo to rerun if config_schema.toml changes
-    println!("cargo:rerun-if-changed=config_schema.toml");
-
-    // Read and parse the schema TOML
-    let schema_content =
-        fs::read_to_string("config_schema.toml").expect("Failed to read config_schema.toml");
-
-    let schema: toml::Value =
-        toml::from_str(&schema_content).expect("Failed to parse config_schema.toml");
-
+fn generate_macros_source(schema: &toml::Value) -> String {
     let mut output = String::from("/// Auto-generated config access macros\n");
-    output.push_str("/// DO NOT EDIT - Generated from config_schema.toml by build.rs\n");
+    output.push_str("/// DO NOT EDIT - Generated from config_schema.toml\n");
+    output.push_str(
+        "/// Regenerate via crate::app::config_system::codegen::regenerate_generated_files()\n",
+    );
 
-    // Generate config! macro (getter through App)
     output.push_str("/// Get a config value by field name string\n");
     output.push_str("///\n");
     output.push_str("/// # Examples\n");
@@ -78,7 +100,6 @@ fn generate_config_macros() {
         for (_, section_data) in sections {
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for (field_name, field_data) in fields {
-                    // Only generate for public fields
                     if let Some(public) = field_data.get("public").and_then(|p| p.as_bool()) {
                         if !public {
                             continue;
@@ -92,7 +113,6 @@ fn generate_config_macros() {
                         .unwrap_or("string");
                     let default_val = field_data.get("default");
 
-                    // Determine getter method and default value
                     let (getter, default) = match field_type {
                         "bool" => {
                             let def = default_val.and_then(|v| v.as_bool()).unwrap_or(false);
@@ -104,7 +124,6 @@ fn generate_config_macros() {
                                     v.as_float().or_else(|| v.as_integer().map(|i| i as f64))
                                 })
                                 .unwrap_or(0.0);
-                            // Ensure float literals always have decimal point
                             let def_str = if def.fract() == 0.0 {
                                 format!("{:.1}", def)
                             } else {
@@ -136,7 +155,6 @@ fn generate_config_macros() {
 
     output.push_str("}\n\n");
 
-    // Generate config_get! macro (getter through ConfigStore)
     output.push_str("/// Get a config value directly from ConfigStore\n");
     output.push_str("///\n");
     output.push_str("/// # Examples\n");
@@ -174,7 +192,6 @@ fn generate_config_macros() {
                                     v.as_float().or_else(|| v.as_integer().map(|i| i as f64))
                                 })
                                 .unwrap_or(0.0);
-                            // Ensure float literals always have decimal point
                             let def_str = if def.fract() == 0.0 {
                                 format!("{:.1}", def)
                             } else {
@@ -206,7 +223,6 @@ fn generate_config_macros() {
 
     output.push_str("}\n\n");
 
-    // Generate config_set! macro (setter through App)
     output.push_str("/// Set a config value by field name string\n");
     output.push_str("///\n");
     output.push_str("/// # Examples\n");
@@ -254,41 +270,5 @@ fn generate_config_macros() {
 
     output.push_str("}\n");
 
-    // Write to src/app/config_system/macros.rs
-    let dest_path = Path::new("src/app/config_system/macros.rs");
-    fs::write(&dest_path, output).expect("Failed to write macros.rs");
-}
-
-fn main() {
-    use std::io::Write;
-
-    // Generate config keys from schema
-    generate_config_keys();
-
-    // Generate config macros from schema
-    generate_config_macros();
-
-    // Windows resource compilation
-    let mut res = winresource::WindowsResource::new();
-    res.set_manifest(
-        r#"
-<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-<trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
-<security>
-    <requestedPrivileges>
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
-    </requestedPrivileges>
-</security>
-</trustInfo>
-</assembly>
-"#,
-    );
-    res.set_icon("./resources/icon.ico");
-    match res.compile() {
-        Err(error) => {
-            write!(std::io::stderr(), "{}", error).unwrap();
-            std::process::exit(1);
-        }
-        Ok(_) => {}
-    }
+    output
 }
