@@ -19,7 +19,10 @@ kill_game = []
 [dependencies]
 logic_system_macros = { path = "logic_system_macros" }
 memory = {version = "*", git = "https://github.com/NoctisMenu/memory.git", branch = "leakeddrv"} #mem access
-windowing = { git = "https://github.com/NoctisMenu/windowing.git" } #cross platform window info struct
+windowing = { git = "https://github.com/NoctisMenu/windowing.git" } #cross platform window info struct\
+unreal-types = {git = "https://github.com/NoctisMenu/unreal.git", features = ["ue5","imgui"], default-features=false}
+unreal-esp = {git = "https://github.com/NoctisMenu/unreal.git", default-features=false, features = ["ue5"]}
+unreal-math = {git = "https://github.com/NoctisMenu/unreal.git", default-features=false, features = ["ue5"]}
 windows-strings = "0.5.0"
 
 windows = { version = "0.62.0", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_System_Console", "Win32_UI_Controls", "Win32_UI_Shell","Win32_Graphics_Dwm"] }

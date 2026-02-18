@@ -168,6 +168,7 @@ impl<S: Send + Sync + 'static> crate::App<S> {
         if display_w <= 0.0 || display_h <= 0.0 {
             return;
         }
+        return;//fixme
 
         let menu_w = (display_w * 0.76).clamp(900.0, 1160.0);
         let menu_h = (display_h * 0.74).clamp(560.0, 760.0);

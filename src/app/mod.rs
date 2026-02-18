@@ -6,6 +6,8 @@ use std::sync::Mutex;
 
 pub mod config_system;
 mod gui;
+mod buffer;
+pub use buffer::DoubleBuffer;
 use windows::Win32::Foundation::HWND;
 
 use newoverlay::imgui::ImColor32;
