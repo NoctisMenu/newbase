@@ -1,6 +1,5 @@
 use std::ops::Mul;
 
-
 #[derive(PartialEq, Default, Clone, Copy, Debug)]
 pub struct Vector3 {
     pub x: f32,
@@ -239,7 +238,7 @@ impl Matrix {
         result
     }
 
-    pub fn get_viewport(pos:(i32,i32),size: (i32,i32)) -> Matrix {
+    pub fn get_viewport(pos: (i32, i32), size: (i32, i32)) -> Matrix {
         let viewport = Viewport {
             x: pos.0,
             y: pos.1,

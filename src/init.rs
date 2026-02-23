@@ -36,7 +36,6 @@ pub fn custom_builder<S: Send + Sync + 'static>(
     game_name: impl Into<String>,
     app_id: Option<u32>,
 ) -> Result<AppBuilder<S>, InitError> {
-    colog::init();
 
     #[cfg(debug_assertions)]
     setup_panic_hook();
@@ -103,6 +102,7 @@ fn setup_panic_hook() {
             .unwrap_or_default();
 
         log::error!("Panic occurred: {}{}", message, location);
+        dbg!(&message);
         std::thread::sleep(Duration::from_secs(10));
         std::process::exit(1);
     }));

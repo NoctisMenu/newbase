@@ -2,6 +2,13 @@
 
 pub mod math;
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum EntityType {
+    #[default]
+    Soul,
+    Creep,
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[repr(u16)]
 pub enum AbilitySlot {
@@ -76,6 +83,7 @@ pub enum Hero {
     Raven = 62,
     Mina = 63,
     Drifter = 64,
+    Venator = 65,
     Viktor = 66,
     Paige = 67,
     Doorman = 69,
@@ -121,12 +129,13 @@ impl TryFrom<i32> for Hero {
             62 => Ok(Hero::Raven),
             63 => Ok(Hero::Mina),
             64 => Ok(Hero::Drifter),
+            65 => Ok(Hero::Venator),
             66 => Ok(Hero::Viktor),
             67 => Ok(Hero::Paige),
             69 => Ok(Hero::Doorman),
             72 => Ok(Hero::Billy),
             _ => {
-                //log::error!("Unknown hero id: {}", value);
+                log::error!("Unknown hero id: {}", value);
                 Err(())
             }
         }
@@ -134,49 +143,6 @@ impl TryFrom<i32> for Hero {
 }
 
 impl Hero {
-    pub fn get_head_bone(self) -> Option<i32> {
-        match self {
-            Hero::Infernus => Some(30),
-            Hero::Seven => Some(14),
-            Hero::Vindicta => Some(7),
-            Hero::LadyGeist => Some(11),
-            Hero::Abrams => Some(7),
-            Hero::Wraith => Some(7),
-            Hero::McGinnis => Some(38),
-            Hero::Paradox => Some(8),
-            Hero::Dynamo => Some(23),
-            Hero::Kelvin => Some(12),
-            Hero::Haze => Some(14),
-            Hero::Holliday => Some(13),
-            Hero::Bebop => Some(6),
-            Hero::Calico => Some(13),
-            Hero::GreyTalon => Some(17),
-            Hero::MoAndKrill => Some(7),
-            Hero::Shiv => Some(13),
-            Hero::Ivy => Some(13),
-            Hero::Viper => Some(13),
-            Hero::Warden => Some(11),
-            Hero::Yamato => Some(34),
-            Hero::Lash => Some(12),
-            Hero::Viscous => Some(7),
-            Hero::Wrecker => Some(8),
-            Hero::Pocket => Some(13),
-            Hero::Mirage => Some(7),
-            Hero::Fathom => Some(13),
-            Hero::Dummy => Some(34),
-            Hero::Magician => Some(7),
-            Hero::Trapper => Some(13),
-            Hero::Raven => Some(7),
-            Hero::Mina => Some(16),
-            Hero::Drifter => Some(18),
-            Hero::Viktor => Some(58),
-            Hero::Paige => Some(56),
-            Hero::Doorman => Some(20),
-            Hero::Billy => Some(7),
-            _ => None,
-        }
-    }
-
     pub fn to_string(self) -> String {
         match self {
             Hero::None => "None",
@@ -213,6 +179,7 @@ impl Hero {
             Hero::Raven => "Raven",
             Hero::Mina => "Mina",
             Hero::Drifter => "Drifter",
+            Hero::Venator => "Venator",
             Hero::Viktor => "Viktor",
             Hero::Paige => "Paige",
             Hero::Doorman => "Doorman",
