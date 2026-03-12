@@ -52,7 +52,7 @@ pub trait LogicSystem<S>: Send {
     }
 
     fn tick(
-        &self,
+        &mut self,
         app: &mut App<S>,
         ui: &newoverlay::imgui::Ui,
         draw_list: &newoverlay::imgui::DrawListMut,
