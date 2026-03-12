@@ -130,7 +130,7 @@ fn expand_logic_system(args: LogicSystemArgs, input_fn: ItemFn) -> Result<proc_m
                 }
 
                 fn tick(
-                    &self,
+                    &mut self,
                     app: #app_ty,
                     ui: #ui_ty,
                     draw_list: #draw_list_ty,
