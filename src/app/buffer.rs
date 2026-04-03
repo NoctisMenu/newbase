@@ -1,12 +1,19 @@
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// NOTE: Only ONE writer can ever write to a DoubleBuffer at anytime;
-/// having multiple writer threads for a singular DoubleBuffer is considered
-/// UB.
+/// Lock-free double buffer: single writer, multiple readers.
+///
+/// Only ONE writer thread may call `write` at any time.
+/// Multiple readers may call `read` concurrently without blocking the writer,
+/// except that the writer will spin-wait if readers are still borrowing the
+/// buffer it needs to reclaim.
 pub struct DoubleBuffer<T> {
     buffers: [UnsafeCell<Vec<T>>; 2],
+    /// Index of the buffer currently visible to readers (0 or 1).
     active_buffer: AtomicUsize,
+    /// Per-buffer reader counts. A reader increments on entry and decrements
+    /// on exit so the writer knows when the old active buffer is safe to reuse.
+    reader_count: [AtomicUsize; 2],
 }
 
 impl<T> DoubleBuffer<T> {
@@ -21,20 +28,29 @@ impl<T> DoubleBuffer<T> {
                 UnsafeCell::new(Vec::with_capacity(capacity)),
             ],
             active_buffer: AtomicUsize::new(0),
+            reader_count: [AtomicUsize::new(0), AtomicUsize::new(0)],
         }
     }
 
-    /// multiple readers can call concurrently without locking the writer out
-    pub fn read(&self) -> &[T] {
-        let active_idx = self.active_buffer.load(Ordering::Acquire);
+    /// Multiple readers may call this concurrently.
+    /// Returns a guard that derefs to `&[T]`; the borrow is tracked so the
+    /// writer will not mutate this buffer while any guard is alive.
+    pub fn read(&self) -> ReadGuard<'_, T> {
+        loop {
+            let idx = self.active_buffer.load(Ordering::Acquire);
+            self.reader_count[idx].fetch_add(1, Ordering::AcqRel);
 
-        // SAFETY: We only read from the active buffer, and the single writer
-        // only modifies the inactive buffer
-        unsafe { &*self.buffers[active_idx].get() }
+            // Re-check: if active_buffer changed between our load and the
+            // increment, we registered on the wrong buffer — undo and retry.
+            if self.active_buffer.load(Ordering::Acquire) == idx {
+                return ReadGuard { buffer: self, idx };
+            }
+
+            self.reader_count[idx].fetch_sub(1, Ordering::AcqRel);
+        }
     }
 
-    /// only safe if called by a SINGLE WRITER thread
-    /// The closure should fully update the provided inactive buffer.
+    /// Only safe if called by a SINGLE WRITER thread.
     pub fn write<F>(&self, update_fn: F)
     where
         F: FnOnce(&mut Vec<T>),
@@ -42,13 +58,20 @@ impl<T> DoubleBuffer<T> {
         let active_idx = self.active_buffer.load(Ordering::Acquire);
         let inactive_idx = 1 - active_idx;
 
-        // SAFETY: Single writer guarantee means only we access the inactive buffer
+        // Spin until all readers that were using the inactive buffer (from two
+        // swaps ago) have dropped their guards.
+        while self.reader_count[inactive_idx].load(Ordering::Acquire) != 0 {
+            std::hint::spin_loop();
+        }
+
+        // SAFETY: No readers hold references into the inactive buffer and the
+        // single-writer invariant guarantees exclusive access.
         unsafe {
             let inactive_buffer = &mut *self.buffers[inactive_idx].get();
             update_fn(inactive_buffer);
         }
 
-        // Atomic swap publishes the new inactive buffer as active.
+        // Publish the newly-written buffer as active.
         self.active_buffer.store(inactive_idx, Ordering::Release);
     }
 
@@ -61,11 +84,36 @@ impl<T> DoubleBuffer<T> {
     }
 
     pub fn len(&self) -> usize {
-        self.read().len()
+        let guard = self.read();
+        guard.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.read().is_empty()
+        let guard = self.read();
+        guard.is_empty()
+    }
+}
+
+/// RAII guard returned by [`DoubleBuffer::read`]. Derefs to `&[T]` and
+/// decrements the reader count on drop.
+pub struct ReadGuard<'a, T> {
+    buffer: &'a DoubleBuffer<T>,
+    idx: usize,
+}
+
+impl<T> std::ops::Deref for ReadGuard<'_, T> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        // SAFETY: While this guard is alive the writer will not touch
+        // buffers[self.idx] because reader_count[self.idx] > 0.
+        unsafe { &*self.buffer.buffers[self.idx].get() }
+    }
+}
+
+impl<T> Drop for ReadGuard<'_, T> {
+    fn drop(&mut self) {
+        self.buffer.reader_count[self.idx].fetch_sub(1, Ordering::AcqRel);
     }
 }
 
