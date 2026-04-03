@@ -52,7 +52,7 @@ pub trait LogicSystem<S>: Send {
     }
 
     fn tick(
-        &self,
+        &mut self,
         app: &mut App<S>,
         ui: &newoverlay::imgui::Ui,
         draw_list: &newoverlay::imgui::DrawListMut,
@@ -300,9 +300,9 @@ impl<S: Send + Sync + 'static> App<S> {
     ) {
         self.is_ticking_logic = true;
         // Move out only the Vec header (ptr/len/cap), not the boxed systems.
-        let systems = std::mem::take(&mut self.logic_systems);
+        let mut systems = std::mem::take(&mut self.logic_systems);
 
-        for system in &systems {
+        for system in &mut systems {
             system.tick(self, ui, draw_list);
         }
 
