@@ -2,6 +2,59 @@ use std::time::Instant;
 
 use device_query::DeviceQuery;
 
+/// Backing storage for [`VERSION_BANNER`]. `"version:"` (8) + up to a 40-char
+/// git hash fits comfortably; oversized hashes are truncated in [`build_banner`].
+const BANNER_CAP: usize = 64;
+
+/// Compile-time `"version:" + hash` into a fixed buffer, returning the filled
+/// length. Pure `const fn` (no crates) so the whole thing folds at compile time.
+const fn build_banner(hash: &str) -> ([u8; BANNER_CAP], usize) {
+    let mut buf = [0u8; BANNER_CAP];
+    let prefix = b"version:";
+    let mut n = 0;
+    while n < prefix.len() {
+        buf[n] = prefix[n];
+        n += 1;
+    }
+    let hash = hash.as_bytes();
+    let mut i = 0;
+    while i < hash.len() && n < BANNER_CAP {
+        buf[n] = hash[i];
+        n += 1;
+        i += 1;
+    }
+    (buf, n)
+}
+
+/// `OFFLINE` banner, produced the same way so the types line up in the `match`.
+const fn build_banner_offline() -> ([u8; BANNER_CAP], usize) {
+    let mut buf = [0u8; BANNER_CAP];
+    let word = b"OFFLINE";
+    let mut n = 0;
+    while n < word.len() {
+        buf[n] = word[n];
+        n += 1;
+    }
+    (buf, n)
+}
+
+const BANNER_BUF: ([u8; BANNER_CAP], usize) = match option_env!("COMMIT_HASH") {
+    Some(hash) => build_banner(hash),
+    None => build_banner_offline(),
+};
+
+/// Build version banner shown top-left every frame.
+///
+/// Resolved at **compile time** from the `COMMIT_HASH` environment variable via
+/// `option_env!`: when set (release builds tag it with the git hash) it renders
+/// as `version:HASH`; when the variable is absent at build time it renders
+/// `OFFLINE`. Everything folds to a static string in the compiled binary — no
+/// runtime env lookup. A `build.rs` reruns the build when `COMMIT_HASH` changes.
+const VERSION_BANNER: &str = match std::str::from_utf8(BANNER_BUF.0.split_at(BANNER_BUF.1).0) {
+    Ok(s) => s,
+    Err(_) => "OFFLINE",
+};
+
 impl<S: 'static + Send + Sync> crate::App<S> {
     fn draw_baseline_overlay_primitives(
         &self,
@@ -44,6 +97,11 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 [1.0, 1.0, 1.0, 0.01],
             )
             .build();
+
+        // Build version banner, top-left. Shadow then text for legibility over
+        // any background.
+        draw_list.add_text([5.0, 4.0], [0.0, 0.0, 0.0, 0.75], VERSION_BANNER);
+        draw_list.add_text([4.0, 3.0], [1.0, 1.0, 1.0, 1.0], VERSION_BANNER);
     }
 
     fn force_clear_overlay_window(&mut self, overlay: &mut newoverlay::Overlay) {
