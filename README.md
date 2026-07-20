@@ -25,6 +25,70 @@ The supplied UI design is embedded at `resources/frontend.html`. Its original
 newbase logo animation remains an ImGui foreground sequence; the WebView menu is
 revealed only after that sequence completes.
 
+## Remote function calls
+
+On 64-bit Windows, an app can open its attached game process and invoke a
+function using the Microsoft x64 ABI:
+
+```rust,no_run
+use std::time::Duration;
+use newbase::RemoteArgument;
+
+let process = app.remote_process()?;
+let result = unsafe {
+    process.call(
+        function_address,
+        &[
+            RemoteArgument::from(object_address),
+            RemoteArgument::from(10_u32),
+            RemoteArgument::from(0.5_f32),
+        ],
+        Duration::from_secs(2),
+    )?
+};
+let integer_return = result.as_usize();
+```
+
+The function address and signature must be valid in the target. Integer and
+pointer returns are read from `RAX`; floating-point returns are available with
+`as_f32()` or `as_f64()`. Up to 16 integer, pointer, `f32`, or `f64` arguments
+are supported. Aggregate/vector values, non-Microsoft calling conventions, and
+variadic functions are not supported.
+
+### Remote hooks
+
+`RemoteHook` installs reversible x64 entry-point detours. It decodes whole
+instructions, relocates relative calls/jumps, conditional branches, loop-family
+branches, and RIP-relative memory operands into a trampoline, then selects a
+5-byte relative jump or a register-preserving 14-byte absolute jump for the
+entry patch.
+
+```rust,no_run
+let mut hook = unsafe {
+    app.install_remote_detour(target_function, replacement_function)?
+};
+
+// The replacement can use this address to invoke the relocated original body.
+let original_function = hook.trampoline_address();
+
+// Target threads must be kept away from the entry while it is being patched.
+unsafe { hook.disable()? };
+unsafe { hook.enable()? };
+unsafe { hook.remove()? };
+```
+
+`RemoteHook::install_code` can instead copy a position-independent machine-code
+prelude into dynamically selected free memory in the target. It appends a jump
+through the relocated original instructions automatically. Hook and trampoline
+memory is initially writable, changed to executable/read-only before use, and
+released after the original entry is restored.
+
+All hook instruction reads and writes use newbase's kernel-driver memory path.
+Consequently, hooks can only be created after newbase has fully initialized the
+driver for the attached game process. Windows virtual-memory APIs are still used
+to locate and allocate free regions, change page protection, and flush the
+instruction cache; they are not used to transfer hook or target bytes.
+
 ## Dependency
 
 The repository tracks the default texture-composition branch directly:

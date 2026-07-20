@@ -244,6 +244,51 @@ impl<S: Send + Sync + 'static> App<S> {
         AppBuilder::new(game_pid, game_window, time_remaining, state)
     }
 
+    /// Open a handle that can invoke functions in the attached game process.
+    ///
+    /// Keep the returned handle around when making multiple calls. Opening it
+    /// once avoids acquiring a new Windows process handle for every call.
+    #[cfg(target_arch = "x86_64")]
+    pub fn remote_process(&self) -> Result<crate::RemoteProcess, crate::RemoteCallError> {
+        crate::RemoteProcess::open(self.game_pid)
+    }
+
+    /// Install a driver-backed detour in the attached game process.
+    ///
+    /// This is available only after newbase has initialized its memory driver.
+    ///
+    /// # Safety
+    ///
+    /// Both addresses must be valid x64 code with compatible calling conventions,
+    /// and target threads must not execute the entry while it is being patched.
+    #[cfg(target_arch = "x86_64")]
+    pub unsafe fn install_remote_detour(
+        &self,
+        target: usize,
+        destination: usize,
+    ) -> Result<crate::RemoteHook, crate::RemoteHookError> {
+        let process = self.remote_process()?;
+        // SAFETY: The caller accepted RemoteHook's installation contract.
+        unsafe { crate::RemoteHook::install_detour(&process, target, destination) }
+    }
+
+    /// Install a driver-backed position-independent code hook in the game process.
+    ///
+    /// # Safety
+    ///
+    /// `target` and `code` must satisfy [`crate::RemoteHook::install_code`]'s
+    /// requirements, and target threads must be synchronized during patching.
+    #[cfg(target_arch = "x86_64")]
+    pub unsafe fn install_remote_code_hook(
+        &self,
+        target: usize,
+        code: &[u8],
+    ) -> Result<crate::RemoteHook, crate::RemoteHookError> {
+        let process = self.remote_process()?;
+        // SAFETY: The caller accepted RemoteHook's installation contract.
+        unsafe { crate::RemoteHook::install_code(&process, target, code) }
+    }
+
     /// Queue debug text for this frame.
     ///
     /// Text is rendered by the overlay under the FPS counters and cleared each frame.
