@@ -15,7 +15,7 @@ macro_rules! skip_err {
     };
 }
 
-///Unwraps a given Option<T>, returning the interior T or continuing.
+/// Unwraps a given `Option<T>`, returning the interior `T` or continuing.
 #[macro_export]
 macro_rules! skip_opt {
     ($res:expr) => {
@@ -45,7 +45,7 @@ macro_rules! ret_err {
     };
 }
 
-///Unwraps a given Option<T>, returning the interior T or returning.
+/// Unwraps a given `Option<T>`, returning the interior `T` or returning.
 #[macro_export]
 macro_rules! ret_opt {
     ($res:expr) => {

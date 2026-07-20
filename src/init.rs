@@ -16,10 +16,7 @@ const RETRY_DELAY: Duration = Duration::from_millis(5000);
 #[derive(Debug, Error)]
 pub enum InitError {
     #[error("failed to find game process '{process_name}' after {retries} retries")]
-    ProcessNotFound {
-        process_name: String,
-        retries: u32,
-    },
+    ProcessNotFound { process_name: String, retries: u32 },
     #[error("failed to find game window for pid {pid} after {retries} retries")]
     WindowNotFound { pid: u32, retries: u32 },
     #[error("failed to initialize driver; are you running as admin?")]
@@ -36,7 +33,6 @@ pub fn custom_builder<S: Send + Sync + 'static>(
     game_name: impl Into<String>,
     app_id: Option<u32>,
 ) -> Result<AppBuilder<S>, InitError> {
-
     #[cfg(debug_assertions)]
     setup_panic_hook();
 
@@ -56,7 +52,9 @@ pub fn custom_builder<S: Send + Sync + 'static>(
             log::info!("Launching game...");
             launch_game(app_id);
         } else {
-            log::info!("Game process not found and no Steam app id provided; waiting for process...");
+            log::info!(
+                "Game process not found and no Steam app id provided; waiting for process..."
+            );
         }
     }
 
@@ -279,8 +277,9 @@ fn disable_console_decorations() {
     };
     use windows::Win32::UI::Controls::ShowScrollBar;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GWL_STYLE, HWND_NOTOPMOST, SB_BOTH, SB_HORZ, SB_VERT, SWP_FRAMECHANGED,
-        SWP_NOACTIVATE, SWP_SHOWWINDOW, GetForegroundWindow, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, WS_POPUP, WS_VISIBLE,
+        GWL_EXSTYLE, GWL_STYLE, GetForegroundWindow, HWND_NOTOPMOST, SB_BOTH, SB_HORZ, SB_VERT,
+        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetForegroundWindow, SetWindowLongPtrW,
+        SetWindowPos, WS_POPUP, WS_VISIBLE,
     };
 
     unsafe {

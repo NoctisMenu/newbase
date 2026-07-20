@@ -1,4 +1,7 @@
-use std::time::Instant;
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use device_query::DeviceQuery;
 
@@ -115,9 +118,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 break;
             }
 
-            overlay.render(|ui| {
-                let draw_list = ui.get_background_draw_list();
-                self.draw_baseline_overlay_primitives(ui, &draw_list, true);
+            let _ = overlay.render(|ui, draw_list| {
+                self.draw_baseline_overlay_primitives(ui, draw_list, true);
             });
 
             unsafe {
@@ -172,12 +174,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 .min(MAX_ATLAS_LOGO_DIM as f32 / logo_h as f32);
             let new_w = ((logo_w as f32 * scale).round() as u32).max(1);
             let new_h = ((logo_h as f32 * scale).round() as u32).max(1);
-            logo = image::imageops::resize(
-                &logo,
-                new_w,
-                new_h,
-                image::imageops::FilterType::Lanczos3,
-            );
+            logo =
+                image::imageops::resize(&logo, new_w, new_h, image::imageops::FilterType::Lanczos3);
             logo_w = new_w;
             logo_h = new_h;
         }
@@ -187,93 +185,92 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         let mut uv_max = [0.0_f32; 2];
         let mut loaded_font = None;
         let mut packed_ok = false;
-        let upload_ok = overlay.configure_fonts(|ctx| unsafe {
-            let mut fonts = ctx.fonts();
-            loaded_font = Some(fonts.add_font(&[newoverlay::imgui::FontSource::TtfData {
-                data: include_bytes!("../resources/tahoma.ttf"),
-                size_pixels: 22.0,
-                config: Some(newoverlay::imgui::FontConfig {
-                    pixel_snap_h: true,
-                    oversample_h: 1,
-                    oversample_v: 1,
-                    rasterizer_multiply: 1.30,
-                    ..Default::default()
-                }),
-            }]));
+        let upload_ok = overlay
+            .configure_fonts(|ctx| unsafe {
+                let mut fonts = ctx.fonts();
+                loaded_font = Some(fonts.add_font(&[newoverlay::imgui::FontSource::TtfData {
+                    data: include_bytes!("../resources/tahoma.ttf"),
+                    size_pixels: 22.0,
+                    config: Some(newoverlay::imgui::FontConfig {
+                        pixel_snap_h: true,
+                        oversample_h: 1,
+                        oversample_v: 1,
+                        rasterizer_multiply: 1.30,
+                        ..Default::default()
+                    }),
+                }]));
 
-            // The font atlas is already built by the renderer at this point.
-            // Clear texture data so custom rect packing can run again.
-            fonts.clear_tex_data();
-            if fonts.tex_desired_width < 2048 {
-                fonts.tex_desired_width = 2048;
-            }
-
-            let atlas = (&mut *fonts as *mut _) as *mut newoverlay::imgui::sys::ImFontAtlas;
-            let rect_index = newoverlay::imgui::sys::ImFontAtlas_AddCustomRectRegular(
-                atlas,
-                logo_w as i32,
-                logo_h as i32,
-            );
-            if rect_index < 0 {
-                return;
-            }
-
-            let _ = fonts.build_rgba32_texture();
-
-            let mut atlas_pixels = std::ptr::null_mut();
-            let mut atlas_w = 0_i32;
-            let mut atlas_h = 0_i32;
-            let mut bytes_per_pixel = 0_i32;
-            newoverlay::imgui::sys::ImFontAtlas_GetTexDataAsRGBA32(
-                atlas,
-                &mut atlas_pixels,
-                &mut atlas_w,
-                &mut atlas_h,
-                &mut bytes_per_pixel,
-            );
-
-            if atlas_pixels.is_null() || bytes_per_pixel != 4 || atlas_w <= 0 || atlas_h <= 0 {
-                return;
-            }
-
-            let rect = newoverlay::imgui::sys::ImFontAtlas_GetCustomRectByIndex(atlas, rect_index);
-            if rect.is_null() || !newoverlay::imgui::sys::ImFontAtlasCustomRect_IsPacked(rect) {
-                return;
-            }
-
-            let rect = &*rect;
-            let rect_x = rect.X as usize;
-            let rect_y = rect.Y as usize;
-            let atlas_w = atlas_w as usize;
-            let logo_w = logo_w as usize;
-            let logo_h = logo_h as usize;
-            let atlas_pixels = atlas_pixels as *mut u8;
-
-            for row in 0..logo_h {
-                let src_offset = row * logo_w * 4;
-                let dst_offset = ((rect_y + row) * atlas_w + rect_x) * 4;
-                let src_row =
-                    std::slice::from_raw_parts(logo_pixels.as_ptr().add(src_offset), logo_w * 4);
-                let dst_row =
-                    std::slice::from_raw_parts_mut(atlas_pixels.add(dst_offset), logo_w * 4);
-
-                // DX9 path in this renderer expects BGRA ordering.
-                for px in 0..logo_w {
-                    let i = px * 4;
-                    dst_row[i] = src_row[i + 2];
-                    dst_row[i + 1] = src_row[i + 1];
-                    dst_row[i + 2] = src_row[i];
-                    dst_row[i + 3] = src_row[i + 3];
+                // The font atlas is already built by the renderer at this point.
+                // Clear texture data so custom rect packing can run again.
+                fonts.clear_tex_data();
+                if fonts.tex_desired_width < 2048 {
+                    fonts.tex_desired_width = 2048;
                 }
-            }
 
-            let mut uv0 = newoverlay::imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
-            let mut uv1 = newoverlay::imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
-            newoverlay::imgui::sys::ImFontAtlas_CalcCustomRectUV(atlas, rect, &mut uv0, &mut uv1);
-            uv_min = [uv0.x, uv0.y];
-            uv_max = [uv1.x, uv1.y];
-            packed_ok = true;
-        });
+                let atlas = (&mut *fonts as *mut _) as *mut newoverlay::imgui::sys::ImFontAtlas;
+                let rect_index = newoverlay::imgui::sys::ImFontAtlas_AddCustomRectRegular(
+                    atlas,
+                    logo_w as i32,
+                    logo_h as i32,
+                );
+                if rect_index < 0 {
+                    return;
+                }
+
+                let _ = fonts.build_rgba32_texture();
+
+                let mut atlas_pixels = std::ptr::null_mut();
+                let mut atlas_w = 0_i32;
+                let mut atlas_h = 0_i32;
+                let mut bytes_per_pixel = 0_i32;
+                newoverlay::imgui::sys::ImFontAtlas_GetTexDataAsRGBA32(
+                    atlas,
+                    &mut atlas_pixels,
+                    &mut atlas_w,
+                    &mut atlas_h,
+                    &mut bytes_per_pixel,
+                );
+
+                if atlas_pixels.is_null() || bytes_per_pixel != 4 || atlas_w <= 0 || atlas_h <= 0 {
+                    return;
+                }
+
+                let rect =
+                    newoverlay::imgui::sys::ImFontAtlas_GetCustomRectByIndex(atlas, rect_index);
+                if rect.is_null() || !newoverlay::imgui::sys::ImFontAtlasCustomRect_IsPacked(rect) {
+                    return;
+                }
+
+                let rect = &*rect;
+                let rect_x = rect.X as usize;
+                let rect_y = rect.Y as usize;
+                let atlas_w = atlas_w as usize;
+                let logo_w = logo_w as usize;
+                let logo_h = logo_h as usize;
+                for row in 0..logo_h {
+                    let src_offset = row * logo_w * 4;
+                    let dst_offset = ((rect_y + row) * atlas_w + rect_x) * 4;
+                    let src_row = std::slice::from_raw_parts(
+                        logo_pixels.as_ptr().add(src_offset),
+                        logo_w * 4,
+                    );
+                    let dst_row =
+                        std::slice::from_raw_parts_mut(atlas_pixels.add(dst_offset), logo_w * 4);
+
+                    // Composite's D3D11 atlas upload consumes the source RGBA order.
+                    dst_row.copy_from_slice(src_row);
+                }
+
+                let mut uv0 = newoverlay::imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
+                let mut uv1 = newoverlay::imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
+                newoverlay::imgui::sys::ImFontAtlas_CalcCustomRectUV(
+                    atlas, rect, &mut uv0, &mut uv1,
+                );
+                uv_min = [uv0.x, uv0.y];
+                uv_max = [uv1.x, uv1.y];
+                packed_ok = true;
+            })
+            .is_ok();
 
         if loaded_font.is_none() {
             log::warn!("Failed to load resources/tahoma.ttf for FPS counter");
@@ -352,22 +349,60 @@ impl<S: 'static + Send + Sync> crate::App<S> {
     }
 
     pub fn run(&mut self) {
+        let ipc_messages = Arc::new(Mutex::new(Vec::<String>::new()));
         let mut overlay = loop {
-            match newoverlay::Overlay::new() {
-                Some(o) => break o,
-                None => {
-                    log::error!("Searching for discord window...");
+            let callback_messages = Arc::clone(&ipc_messages);
+            let config = newoverlay::OverlayConfig {
+                transparent: true,
+                clear_color: [0.0, 0.0, 0.0, 0.0],
+                ipc_handler: Some(Box::new(move |message| {
+                    if let Ok(mut queue) = callback_messages.lock() {
+                        queue.push(message);
+                    }
+                })),
+                ..newoverlay::OverlayConfig::default()
+            };
+            match newoverlay::Overlay::new(config) {
+                Ok(overlay) => break overlay,
+                Err(error) => {
+                    log::error!("Searching for Discord overlay window: {error}");
                     std::thread::sleep(std::time::Duration::from_secs(2))
                 }
             }
         };
 
         log::info!("Overlay initialized successfully");
+        let menu_html = {
+            let store = self.config_store.read();
+            crate::app::web_menu::build_html(&store)
+        };
+        overlay.load_html(&menu_html);
         // Font + logo are configured together in initialize_logo_texture().
         self.initialize_logo_texture(&mut overlay);
+        let mut menu_revealed = false;
+        let mut web_menu_visible = false;
 
         loop {
             let start = std::time::Instant::now();
+
+            let pending_messages = ipc_messages
+                .lock()
+                .map(|mut queue| queue.drain(..).collect::<Vec<_>>())
+                .unwrap_or_default();
+            for message in pending_messages {
+                let command = {
+                    let mut store = self.config_store.write();
+                    crate::app::web_menu::apply_message(&mut store, &message)
+                };
+                match command {
+                    Ok(crate::app::web_menu::MenuCommand::Quit) => self.request_shutdown(),
+                    Ok(crate::app::web_menu::MenuCommand::SetVisible(visible)) => {
+                        self.visible = visible;
+                    }
+                    Ok(crate::app::web_menu::MenuCommand::None) => {}
+                    Err(error) => log::warn!("Ignoring WebView menu message: {error}"),
+                }
+            }
 
             if self.exit {
                 log::warn!("Exiting!");
@@ -395,13 +430,12 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 self.show_time = std::time::Instant::now();
             }
 
-            self.visible = true;
-            self.show_time = std::time::Instant::now();
-
             // Set window size to match game window size (x axis+1 to avoid glfw passthrough blackout bug)
             // Cache window info updates to ~10Hz to avoid expensive Windows API calls every frame
             if self.last_fps_update.elapsed().as_millis() >= 100 {
-                self.window_info = windowing::get_window_info(self.game_window).unwrap().unwrap();
+                self.window_info = windowing::get_window_info(self.game_window)
+                    .unwrap()
+                    .unwrap();
             }
 
             if !overlay.start_render() {
@@ -409,11 +443,26 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             }
 
             // Render UI
-            overlay.render(|ui| {
-                let draw_list = ui.get_background_draw_list();
-                self.draw_baseline_overlay_primitives(ui, &draw_list, false);
+            if self.menu_intro_finished && !menu_revealed {
+                menu_revealed = true;
+                web_menu_visible = self.visible;
+                overlay.eval(&format!(
+                    "window.__newbaseSetVisible && window.__newbaseSetVisible({});",
+                    self.visible
+                ));
+            } else if menu_revealed && web_menu_visible != self.visible {
+                web_menu_visible = self.visible;
+                overlay.eval(&format!(
+                    "window.__newbaseSetVisible && window.__newbaseSetVisible({});",
+                    self.visible
+                ));
+            }
 
-                // Render menu and main loop
+            if let Err(error) = overlay.render(|ui, draw_list| {
+                self.draw_baseline_overlay_primitives(ui, draw_list, false);
+
+                // The existing logo animation remains an ImGui foreground layer.
+                // Once it completes, the schema-generated WebView menu is revealed.
                 if self.visible {
                     self.render_menu(ui);
                     // Clamp intro timeline advancement so first-frame delta spikes
@@ -423,19 +472,22 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 }
 
                 if self.menu_intro_finished {
-                    self.tick_logic(ui, &draw_list);
+                    self.tick_logic(ui, draw_list);
 
                     if let Some(font) = self.fps_font {
                         let _font = ui.push_font(font);
-                        self.draw_perf_and_debug(ui, &draw_list);
+                        self.draw_perf_and_debug(ui, draw_list);
                     } else {
-                        self.draw_perf_and_debug(ui, &draw_list);
+                        self.draw_perf_and_debug(ui, draw_list);
                     }
                 }
 
                 // Debug text is transient by design; callers should re-submit each frame.
                 self.debug_lines.clear();
-            });
+            }) {
+                log::error!("Overlay render failed: {error}");
+                break;
+            }
 
             // Measure true frametime BEFORE DwmFlush (no vsync wait)
             self.true_frametime = start.elapsed();
@@ -472,6 +524,10 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 }
 
                 self.last_fps_update = Instant::now();
+                overlay.eval(&format!(
+                    "window.__newbaseSetFps && window.__newbaseSetFps({});",
+                    self.averaged_fps
+                ));
             }
         }
     }

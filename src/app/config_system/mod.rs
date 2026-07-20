@@ -192,8 +192,6 @@ impl ConfigStore {
         let new_store = Self::load()?;
         self.values = new_store.values;
         // Don't replace widgets - sync values to existing widgets to preserve animation state
-        let keys: Vec<String> = self.values.keys().cloned().collect();
-        for key in keys {}
         self.dirty = false;
         Ok(())
     }
@@ -201,6 +199,11 @@ impl ConfigStore {
     /// Get reference to schema
     pub fn schema(&self) -> &ConfigSchema {
         &self.schema
+    }
+
+    /// Return the current value for a dotted schema key.
+    pub fn value(&self, key: &str) -> Option<&ConfigValue> {
+        self.values.get(key)
     }
 
     /// Find field schema by dotted key
@@ -215,10 +218,10 @@ impl ConfigStore {
 
     /// Create widget instances from schema
     fn create_widgets(
-        schema: &ConfigSchema,
-        values: &HashMap<String, ConfigValue>,
+        _schema: &ConfigSchema,
+        _values: &HashMap<String, ConfigValue>,
     ) -> HashMap<String, WidgetState> {
-        let mut widgets = HashMap::new();
+        let widgets = HashMap::new();
 
         /*
         for (section_name, section) in &schema.sections {
@@ -492,10 +495,10 @@ impl ConfigStore {
             for (field_name, field) in &section.fields {
                 let key = format!("{}.{}", section_name, field_name);
 
-                if field.public {
-                    if let Some(value) = self.values.get(&key) {
-                        public_values.insert(key, Self::value_to_toml(value));
-                    }
+                if field.public
+                    && let Some(value) = self.values.get(&key)
+                {
+                    public_values.insert(key, Self::value_to_toml(value));
                 }
             }
         }
@@ -594,15 +597,15 @@ impl ConfigStore {
     pub fn set_float(&mut self, key: &str, value: f32) -> Result<()> {
         // Validate range from schema
         if let Some(field) = Self::find_field_schema(&self.schema, key) {
-            if let FieldType::Float { min, max } = field.field_type {
-                if value < min || value > max {
-                    return Err(ConfigError::OutOfRange {
-                        key: key.to_string(),
-                        value,
-                        min,
-                        max,
-                    });
-                }
+            if let FieldType::Float { min, max } = field.field_type
+                && (value < min || value > max)
+            {
+                return Err(ConfigError::OutOfRange {
+                    key: key.to_string(),
+                    value,
+                    min,
+                    max,
+                });
             }
             self.values
                 .insert(key.to_string(), ConfigValue::Float(value));
@@ -613,20 +616,62 @@ impl ConfigStore {
         }
     }
 
+    pub fn set_int(&mut self, key: &str, value: i32) -> Result<()> {
+        if let Some(field) = Self::find_field_schema(&self.schema, key) {
+            if let FieldType::Int { min, max } = field.field_type {
+                if value < min || value > max {
+                    return Err(ConfigError::InvalidValue(format!(
+                        "Value {} out of range [{}, {}] for '{}'",
+                        value, min, max, key
+                    )));
+                }
+            } else {
+                return Err(ConfigError::TypeMismatch {
+                    key: key.to_string(),
+                    expected: "int".to_string(),
+                    got: field.field_type.type_name().to_string(),
+                });
+            }
+            self.values.insert(key.to_string(), ConfigValue::Int(value));
+            self.dirty = true;
+            Ok(())
+        } else {
+            Err(ConfigError::KeyNotFound(key.to_string()))
+        }
+    }
+
     pub fn set_color(&mut self, key: &str, color: ImColor32) -> Result<()> {
-        Ok(())
+        let [r, g, b, a] = color.to_rgba();
+        self.set_color_rgba(key, r, g, b, a)
+    }
+
+    pub fn set_color_rgba(&mut self, key: &str, r: u8, g: u8, b: u8, a: u8) -> Result<()> {
+        match Self::find_field_schema(&self.schema, key) {
+            Some(field) if matches!(field.field_type, FieldType::Color) => {
+                self.values
+                    .insert(key.to_string(), ConfigValue::Color { r, g, b, a });
+                self.dirty = true;
+                Ok(())
+            }
+            Some(field) => Err(ConfigError::TypeMismatch {
+                key: key.to_string(),
+                expected: "color".to_string(),
+                got: field.field_type.type_name().to_string(),
+            }),
+            None => Err(ConfigError::KeyNotFound(key.to_string())),
+        }
     }
 
     pub fn set_enum(&mut self, key: &str, value: String) -> Result<()> {
         // Validate against variants
         if let Some(field) = Self::find_field_schema(&self.schema, key) {
-            if let FieldType::Enum { variants } = &field.field_type {
-                if !variants.contains(&value) {
-                    return Err(ConfigError::InvalidValue(format!(
-                        "Invalid enum value '{}' for '{}'. Valid values: {:?}",
-                        value, key, variants
-                    )));
-                }
+            if let FieldType::Enum { variants } = &field.field_type
+                && !variants.contains(&value)
+            {
+                return Err(ConfigError::InvalidValue(format!(
+                    "Invalid enum value '{}' for '{}'. Valid values: {:?}",
+                    value, key, variants
+                )));
             }
             self.values
                 .insert(key.to_string(), ConfigValue::Enum(value));
@@ -647,12 +692,6 @@ impl ConfigStore {
             Err(ConfigError::KeyNotFound(key.to_string()))
         }
     }
-
-    // Widget accessors
-
-    // Sync methods
-
-    /// Sync config value to widget
 
     /// Get field schema by key
     pub fn get_field_schema(&self, key: &str) -> Option<&FieldSchema> {

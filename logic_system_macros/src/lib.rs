@@ -4,7 +4,8 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{
     AngleBracketedGenericArguments, Error, FnArg, GenericArgument, GenericParam, Ident, ItemFn,
-    LitStr, PathArguments, Result, ReturnType, Token, Type, TypePath, TypeReference, parse_macro_input,
+    LitStr, PathArguments, Result, ReturnType, Token, Type, TypePath, TypeReference,
+    parse_macro_input,
 };
 
 struct LogicSystemArgs {
@@ -51,15 +52,24 @@ pub fn logic_system(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-fn expand_logic_system(args: LogicSystemArgs, input_fn: ItemFn) -> Result<proc_macro2::TokenStream> {
+fn expand_logic_system(
+    args: LogicSystemArgs,
+    input_fn: ItemFn,
+) -> Result<proc_macro2::TokenStream> {
     let sig = &input_fn.sig;
     let fn_ident = &sig.ident;
 
     if sig.asyncness.is_some() {
-        return Err(Error::new(sig.fn_token.span, "logic system function cannot be async"));
+        return Err(Error::new(
+            sig.fn_token.span,
+            "logic system function cannot be async",
+        ));
     }
     if sig.constness.is_some() {
-        return Err(Error::new(sig.fn_token.span, "logic system function cannot be const"));
+        return Err(Error::new(
+            sig.fn_token.span,
+            "logic system function cannot be const",
+        ));
     }
     if !matches!(sig.output, ReturnType::Default) {
         return Err(Error::new(
@@ -215,7 +225,8 @@ fn infer_state_ty_from_app_arg(app_ty: &Type) -> Result<Type> {
         ));
     }
 
-    let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &last.arguments
+    let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+        &last.arguments
     else {
         return Err(Error::new(
             last.arguments.span(),

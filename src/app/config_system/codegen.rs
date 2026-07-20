@@ -59,7 +59,7 @@ fn generate_keys_source(schema: &toml::Value) -> String {
     output.push_str(
         "// Regenerate via crate::app::config_system::codegen::regenerate_generated_files()\n",
     );
-    output.push_str("\n");
+    output.push('\n');
 
     if let Some(sections) = schema.get("sections").and_then(|s| s.as_table()) {
         for (section_name, section_data) in sections {
@@ -103,10 +103,10 @@ fn generate_macros_source(schema: &toml::Value) -> String {
         for (_, section_data) in sections {
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for (field_name, field_data) in fields {
-                    if let Some(public) = field_data.get("public").and_then(|p| p.as_bool()) {
-                        if !public {
-                            continue;
-                        }
+                    if let Some(public) = field_data.get("public").and_then(|p| p.as_bool())
+                        && !public
+                    {
+                        continue;
                     }
 
                     let const_name = field_name.to_uppercase();
@@ -171,10 +171,10 @@ fn generate_macros_source(schema: &toml::Value) -> String {
         for (_, section_data) in sections {
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for (field_name, field_data) in fields {
-                    if let Some(public) = field_data.get("public").and_then(|p| p.as_bool()) {
-                        if !public {
-                            continue;
-                        }
+                    if let Some(public) = field_data.get("public").and_then(|p| p.as_bool())
+                        && !public
+                    {
+                        continue;
                     }
 
                     let const_name = field_name.to_uppercase();
@@ -240,10 +240,10 @@ fn generate_macros_source(schema: &toml::Value) -> String {
         for (_, section_data) in sections {
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for (field_name, field_data) in fields {
-                    if let Some(public) = field_data.get("public").and_then(|p| p.as_bool()) {
-                        if !public {
-                            continue;
-                        }
+                    if let Some(public) = field_data.get("public").and_then(|p| p.as_bool())
+                        && !public
+                    {
+                        continue;
                     }
 
                     let const_name = field_name.to_uppercase();

@@ -4,19 +4,16 @@ use windowing::WindowInfo;
 
 use std::sync::Mutex;
 
+mod buffer;
 pub mod config_system;
 mod gui;
-mod buffer;
+pub(crate) mod web_menu;
 pub use buffer::DoubleBuffer;
-use windows::Win32::Foundation::HWND;
-
-use newoverlay::imgui::ImColor32;
-use newoverlay::Overlay;
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicBool, AtomicI64, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicI64, Ordering},
     },
     thread::JoinHandle,
     time::{Duration, Instant},
@@ -72,28 +69,6 @@ pub struct MenuLogo {
     pub aspect_ratio: f32,
 }
 
-pub struct MenuUiState {
-    pub selected_sidebar: usize,
-    pub language_idx: usize,
-    pub render_scale_idx: usize,
-    pub controller_idx: usize,
-    pub blur_strength: f32,
-    pub block_input: bool,
-}
-
-impl Default for MenuUiState {
-    fn default() -> Self {
-        Self {
-            selected_sidebar: 5,
-            language_idx: 0,
-            render_scale_idx: 1,
-            controller_idx: 0,
-            blur_strength: 2.50,
-            block_input: true,
-        }
-    }
-}
-
 pub struct App<S> {
     pub pid: u32,
     pub game_pid: u32,
@@ -135,7 +110,6 @@ pub struct App<S> {
     pub menu_logo: Option<MenuLogo>,
     pub menu_intro_elapsed: f32,
     pub menu_intro_finished: bool,
-    pub menu_ui_state: MenuUiState,
 }
 
 // Builder pattern for easier setup
@@ -188,7 +162,6 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
             menu_logo: None,
             menu_intro_elapsed: 0.0,
             menu_intro_finished: false,
-            menu_ui_state: MenuUiState::default(),
         };
         Self { app }
     }

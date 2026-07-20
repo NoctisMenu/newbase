@@ -1,5 +1,7 @@
-#![feature(stmt_expr_attributes, const_cmp, const_trait_impl)]
+#![feature(stmt_expr_attributes)]
 #![allow(dead_code)]
+
+extern crate composite as newoverlay;
 
 #[cfg(not(target_os = "windows"))]
 compile_error!("This library only supports Windows OS!");
