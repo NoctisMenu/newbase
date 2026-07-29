@@ -29,15 +29,10 @@ windows = { version = "0.62.0", features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
     "Win32_System_Console",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_Memory",
-    "Win32_System_SystemInformation",
-    "Win32_System_Threading",
     "Win32_UI_Controls",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
 ] }
-iced-x86 = { version = "1.21", default-features = false, features = ["std", "decoder", "block_encoder"] }
 parking_lot = "0.12.4"
 device_query = "4.0.1"
 log = "0.4.28"

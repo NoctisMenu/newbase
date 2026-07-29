@@ -58,6 +58,43 @@ const VERSION_BANNER: &str = match std::str::from_utf8(BANNER_BUF.0.split_at(BAN
     Err(_) => "OFFLINE",
 };
 
+/// Runs before any page-owned JavaScript, so navigation and parse failures can
+/// still reach the native log even when the generated menu script never starts.
+const WEBVIEW_DIAGNOSTICS_SCRIPT: &str = r#"
+(() => {
+  const send = (event, details = {}) => {
+    const payload = {type: 'debug', message: `bootstrap ${event}`, readyState: document.readyState, details};
+    try {
+      console.log(`[newbase menu bootstrap] ${event}`, details);
+      window.ipc.postMessage(JSON.stringify(payload));
+    } catch (error) {
+      console.error('[newbase menu bootstrap] diagnostic IPC failed', error);
+    }
+  };
+  const errorPayload = (message, details = {}) => {
+    try {
+      window.ipc.postMessage(JSON.stringify({type: 'js_error', message, ...details}));
+    } catch (_) {}
+  };
+
+  send('installed', {href: location.href});
+  document.addEventListener('readystatechange', () => send('readystatechange'));
+  document.addEventListener('DOMContentLoaded', () => send('DOMContentLoaded'));
+  window.addEventListener('load', () => send('load'));
+  window.addEventListener('pageshow', event => send('pageshow', {persisted: event.persisted}));
+  document.addEventListener('visibilitychange', () => send('visibilitychange', {visibility: document.visibilityState}));
+  window.addEventListener('error', event => errorPayload(event.message || 'unknown window error', {
+    filename: event.filename || '', line: event.lineno || 0, column: event.colno || 0
+  }), true);
+  window.addEventListener('unhandledrejection', event => {
+    errorPayload(`Unhandled promise rejection: ${String(event.reason)}`);
+  });
+  document.addEventListener('securitypolicyviolation', event => {
+    errorPayload(`CSP violation: ${event.violatedDirective}`, {blockedUri: event.blockedURI || ''});
+  });
+})();
+"#;
+
 impl<S: 'static + Send + Sync> crate::App<S> {
     fn draw_baseline_overlay_primitives(
         &self,
@@ -349,27 +386,25 @@ impl<S: 'static + Send + Sync> crate::App<S> {
     }
 
     pub fn run(&mut self) {
-        let wv2_dir = std::env::temp_dir().join("wbv2");
-        let _ = std::fs::create_dir_all(&wv2_dir);
         let ipc_messages = Arc::new(Mutex::new(Vec::<String>::new()));
         let mut overlay = loop {
             let callback_messages = Arc::clone(&ipc_messages);
             let config = newoverlay::OverlayConfig {
                 transparent: true,
                 clear_color: [0.0, 0.0, 0.0, 0.0],
+                initialization_script: Some(WEBVIEW_DIAGNOSTICS_SCRIPT.to_owned()),
+                page_load_handler: Some(Box::new(|event, url| {
+                    let event = match event {
+                        newoverlay::wry::PageLoadEvent::Started => "started",
+                        newoverlay::wry::PageLoadEvent::Finished => "finished",
+                    };
+                    log::info!("WebView navigation {event}: {url}");
+                })),
                 ipc_handler: Some(Box::new(move |message| {
                     if let Ok(mut queue) = callback_messages.lock() {
                         queue.push(message);
                     }
                 })),
-                data_directory: Some(wv2_dir.clone()),
-                incognito: true,
-                additional_browser_args: Some(
-                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
-                     --autoplay-policy=no-user-gesture-required \
-                     --disk-cache-size=1 --media-cache-size=1"
-                        .into(),
-                ),
                 ..newoverlay::OverlayConfig::default()
             };
             match newoverlay::Overlay::new(config) {
@@ -386,9 +421,14 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             let store = self.config_store.read();
             crate::app::web_menu::build_html(&store)
         };
-        overlay.load_html(&menu_html);
+        log::info!("Loading WebView menu HTML ({} bytes)", menu_html.len());
+        match overlay.webview().load_html(&menu_html) {
+            Ok(()) => log::info!("WebView menu HTML navigation requested"),
+            Err(error) => log::error!("WebView menu HTML navigation failed: {error}"),
+        }
         // Font + logo are configured together in initialize_logo_texture().
         self.initialize_logo_texture(&mut overlay);
+        let mut web_menu_ready = false;
         let mut menu_revealed = false;
         let mut web_menu_visible = false;
 
@@ -405,6 +445,14 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                     crate::app::web_menu::apply_message(&mut store, &message)
                 };
                 match command {
+                    Ok(crate::app::web_menu::MenuCommand::Ready) => {
+                        web_menu_ready = true;
+                        log::info!(
+                            "WebView menu DOM ready (intro_finished={}, visible={})",
+                            self.menu_intro_finished,
+                            self.visible
+                        );
+                    }
                     Ok(crate::app::web_menu::MenuCommand::Quit) => self.request_shutdown(),
                     Ok(crate::app::web_menu::MenuCommand::SetVisible(visible)) => {
                         self.visible = visible;
@@ -438,6 +486,7 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             {
                 self.visible = !self.visible;
                 self.show_time = std::time::Instant::now();
+                log::info!("WebView menu visibility toggled to {}", self.visible);
             }
 
             // Set window size to match game window size (x axis+1 to avoid glfw passthrough blackout bug)
@@ -453,15 +502,17 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             }
 
             // Render UI
-            if self.menu_intro_finished && !menu_revealed {
+            if web_menu_ready && self.menu_intro_finished && !menu_revealed {
                 menu_revealed = true;
                 web_menu_visible = self.visible;
+                log::info!("Revealing WebView menu (visible={})", self.visible);
                 overlay.eval(&format!(
                     "window.__newbaseSetVisible && window.__newbaseSetVisible({});",
                     self.visible
                 ));
             } else if menu_revealed && web_menu_visible != self.visible {
                 web_menu_visible = self.visible;
+                log::info!("Applying WebView menu visibility={}", self.visible);
                 overlay.eval(&format!(
                     "window.__newbaseSetVisible && window.__newbaseSetVisible({});",
                     self.visible
@@ -540,7 +591,5 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 ));
             }
         }
-        drop(overlay);
-        let _ = std::fs::remove_dir_all(&wv2_dir);
     }
 }

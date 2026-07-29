@@ -15,9 +15,10 @@ const EXTRA_CSS: &str = r#"
 }
 .config-select:focus, .config-text:focus { border-color: var(--accent); }
 .config-color {
-  width: 31px; height: 24px; padding: 2px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--bg-raised); cursor: pointer;
+  appearance: none; width: 31px; height: 24px; padding: 0; flex-shrink: 0;
+  border: 1px solid var(--border-strong); background: var(--bg-raised); cursor: pointer;
 }
+.config-color:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .config-slider { width: 132px; display: grid; gap: 3px; text-align: right; }
 .config-slider input { width: 132px; }
 .config-readonly { color: var(--text-dim); font-family: ui-monospace, monospace; }
@@ -25,14 +26,58 @@ const EXTRA_CSS: &str = r#"
 "#;
 
 const MENU_SCRIPT: &str = r#"
+(() => {
 const ipc = payload => {
-  try { window.ipc.postMessage(JSON.stringify(payload)); } catch (_) {}
+  try {
+    window.ipc.postMessage(JSON.stringify(payload));
+    return true;
+  } catch (error) {
+    console.error('[newbase menu] IPC failed', error, payload);
+    return false;
+  }
+};
+const debug = (message, details = {}) => {
+  console.log(`[newbase menu] ${message}`, details);
+  ipc({type: 'debug', message, readyState: document.readyState, details});
 };
 
+window.addEventListener('error', event => {
+  ipc({
+    type: 'js_error',
+    message: event.message || 'unknown window error',
+    filename: event.filename || '',
+    line: event.lineno || 0,
+    column: event.colno || 0
+  });
+});
+window.addEventListener('unhandledrejection', event => {
+  ipc({type: 'js_error', message: `Unhandled promise rejection: ${String(event.reason)}`});
+});
+
+debug('script started', {
+  href: location.href,
+  uiFound: Boolean(document.getElementById('ui')),
+  bodyChildren: document.body?.children.length ?? -1,
+  viewport: `${innerWidth}x${innerHeight}`
+});
+
 window.__newbaseSetVisible = visible => {
-  document.getElementById('ui').style.display = visible ? 'block' : 'none';
+  const ui = document.getElementById('ui');
+  if (!ui) {
+    debug('visibility failed: #ui not found', {visible});
+    return false;
+  }
+  ui.style.display = visible ? 'block' : 'none';
   const hud = document.getElementById('fps-hud');
   if (hud) hud.style.display = visible ? 'none' : 'block';
+  const rect = ui.getBoundingClientRect();
+  debug('visibility applied', {
+    visible,
+    inlineDisplay: ui.style.display,
+    computedDisplay: getComputedStyle(ui).display,
+    rect: {x: rect.x, y: rect.y, width: rect.width, height: rect.height}
+  });
+  return true;
 };
 window.__newbaseSetFps = fps => {
   const text = Math.max(0, Number(fps) || 0).toFixed(0) + ' fps';
@@ -107,32 +152,279 @@ document.querySelectorAll('.switch[data-config-key]').forEach(button => {
     ipc({type: 'config', key: button.dataset.configKey, value});
   });
 });
+const updateSliderFill = input => {
+  const min = Number(input.min || 0);
+  const max = Number(input.max || 100);
+  const value = Number(input.value);
+  const percent = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  input.style.setProperty('--fill', `${Math.max(0, Math.min(100, percent))}%`);
+};
 document.querySelectorAll('input[type=range][data-config-key]').forEach(input => {
   const output = document.querySelector(`[data-value-for="${CSS.escape(input.dataset.configKey)}"]`);
-  input.addEventListener('input', () => {
+  const emitValue = () => {
     const integer = input.dataset.kind === 'int';
     const value = integer ? parseInt(input.value, 10) : parseFloat(input.value);
     if (output) output.textContent = integer ? String(value) : Number(value).toFixed(2);
+    updateSliderFill(input);
     ipc({type: 'config', key: input.dataset.configKey, value});
+  };
+  const setSyntheticSliderValue = clientX => {
+    const rect = input.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const min = Number(input.min || 0);
+    const max = Number(input.max || 100);
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    let value = min + (max - min) * ratio;
+    if (input.dataset.kind === 'int') {
+      value = Math.round(value);
+    } else if (input.step && input.step !== 'any') {
+      const step = Number(input.step);
+      if (Number.isFinite(step) && step > 0) value = min + Math.round((value - min) / step) * step;
+    }
+    input.value = String(Math.max(min, Math.min(max, value)));
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+  };
+
+  // Composite forwards off-screen WebView input as synthetic MouseEvents.
+  // Chromium intentionally does not run the native range-control drag action
+  // for untrusted events, so reproduce it from the event's client coordinate.
+  let syntheticDrag = false;
+  input.addEventListener('mousedown', event => {
+    if (event.isTrusted || event.button !== 0) return;
+    syntheticDrag = true;
+    setSyntheticSliderValue(event.clientX);
+    debug('synthetic slider drag started', {key: input.dataset.configKey, x: event.clientX});
   });
+  input.addEventListener('mousemove', event => {
+    if (!syntheticDrag || event.isTrusted) return;
+    setSyntheticSliderValue(event.clientX);
+    if ((event.buttons & 1) === 0) syntheticDrag = false;
+  });
+  input.addEventListener('mouseup', event => {
+    if (!syntheticDrag || event.isTrusted || event.button !== 0) return;
+    setSyntheticSliderValue(event.clientX);
+    syntheticDrag = false;
+    debug('synthetic slider drag finished', {key: input.dataset.configKey, value: input.value});
+  });
+  input.addEventListener('input', emitValue);
+  updateSliderFill(input);
 });
 document.querySelectorAll('select[data-config-key], input.config-text[data-config-key]').forEach(input => {
   input.addEventListener('change', () => ipc({type: 'config', key: input.dataset.configKey, value: input.value}));
 });
-document.querySelectorAll('input.config-color[data-config-key]').forEach(input => {
-  input.addEventListener('input', () => {
-    const value = input.value.slice(1);
-    ipc({type: 'config', key: input.dataset.configKey, value: {
-      r: parseInt(value.slice(0, 2), 16), g: parseInt(value.slice(2, 4), 16),
-      b: parseInt(value.slice(4, 6), 16), a: Number(input.dataset.alpha || 255)
+// Schema colors use the template's custom HSV picker. A native
+// <input type="color"> cannot open from Composite's synthetic WebView events.
+(() => {
+  const swatches = document.querySelectorAll('.config-color[data-config-key]');
+  const pop = document.getElementById('color-popover');
+  const wheel = document.getElementById('wheel');
+  const cursor = document.getElementById('wheel-cursor');
+  const valBar = document.getElementById('val-slider');
+  const hexInput = document.getElementById('hex-input');
+  if (!swatches.length || !pop || !wheel || !cursor || !valBar || !hexInput) return;
+
+  const context = wheel.getContext('2d');
+  const size = wheel.width;
+  const radius = size / 2;
+  let hue = 0, saturation = 0, brightness = 0;
+  let active = null;
+  let wheelDrag = false;
+  let valueDrag = false;
+
+  const hsvToRgb = (h, s, v) => {
+    const chroma = v * s;
+    const sector = (h % 360) / 60;
+    const x = chroma * (1 - Math.abs(sector % 2 - 1));
+    let r = 0, g = 0, b = 0;
+    if (sector < 1) { r = chroma; g = x; }
+    else if (sector < 2) { r = x; g = chroma; }
+    else if (sector < 3) { g = chroma; b = x; }
+    else if (sector < 4) { g = x; b = chroma; }
+    else if (sector < 5) { r = x; b = chroma; }
+    else { r = chroma; b = x; }
+    const match = v - chroma;
+    return [r, g, b].map(channel => Math.round((channel + match) * 255));
+  };
+  const rgbToHsv = (red, green, blue) => {
+    const r = red / 255, g = green / 255, b = blue / 255;
+    const maximum = Math.max(r, g, b);
+    const minimum = Math.min(r, g, b);
+    const delta = maximum - minimum;
+    let h = 0;
+    if (delta !== 0) {
+      if (maximum === r) h = ((g - b) / delta) % 6;
+      else if (maximum === g) h = (b - r) / delta + 2;
+      else h = (r - g) / delta + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    return [h, maximum === 0 ? 0 : delta / maximum, maximum];
+  };
+  const rgbToHex = (r, g, b) => '#' + [r, g, b]
+    .map(channel => channel.toString(16).padStart(2, '0'))
+    .join('').toUpperCase();
+
+  const drawWheel = () => {
+    const image = context.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - radius, dy = y - radius;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const index = (y * size + x) * 4;
+        if (distance > radius) {
+          image.data[index + 3] = 0;
+          continue;
+        }
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        if (angle < 0) angle += 360;
+        const [r, g, b] = hsvToRgb(angle, Math.min(1, distance / radius), brightness);
+        image.data[index] = r;
+        image.data[index + 1] = g;
+        image.data[index + 2] = b;
+        image.data[index + 3] = distance > radius - 1
+          ? Math.round((radius - distance) * 255)
+          : 255;
+      }
+    }
+    context.putImageData(image, 0, 0);
+  };
+  const updateIndicators = () => {
+    const angle = hue * Math.PI / 180;
+    const distance = saturation * radius;
+    const [r, g, b] = hsvToRgb(hue, saturation, brightness);
+    cursor.style.left = `${radius + Math.cos(angle) * distance}px`;
+    cursor.style.top = `${radius + Math.sin(angle) * distance}px`;
+    cursor.style.background = `rgb(${r},${g},${b})`;
+    const full = hsvToRgb(hue, saturation, 1);
+    valBar.style.background = `linear-gradient(to right, #000, rgb(${full[0]},${full[1]},${full[2]}))`;
+    valBar.style.setProperty('--val-pos', `${brightness * 100}%`);
+  };
+  const commit = updateHex => {
+    if (!active) return;
+    const [r, g, b] = hsvToRgb(hue, saturation, brightness);
+    const hex = rgbToHex(r, g, b);
+    active.dataset.value = hex;
+    active.style.background = hex;
+    if (updateHex) hexInput.value = hex;
+    ipc({type: 'config', key: active.dataset.configKey, value: {
+      r, g, b, a: Number(active.dataset.alpha || 255)
     }});
+  };
+  const setFromHex = hex => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return false;
+    const packed = parseInt(hex.slice(1), 16);
+    [hue, saturation, brightness] = rgbToHsv(
+      (packed >> 16) & 255,
+      (packed >> 8) & 255,
+      packed & 255
+    );
+    drawWheel();
+    updateIndicators();
+    return true;
+  };
+  const pickWheel = event => {
+    const rect = wheel.getBoundingClientRect();
+    const scaleX = size / rect.width;
+    const scaleY = size / rect.height;
+    const x = (event.clientX - rect.left) * scaleX - radius;
+    const y = (event.clientY - rect.top) * scaleY - radius;
+    saturation = Math.min(1, Math.sqrt(x * x + y * y) / radius);
+    hue = Math.atan2(y, x) * 180 / Math.PI;
+    if (hue < 0) hue += 360;
+    updateIndicators();
+    commit(true);
+  };
+  const pickValue = event => {
+    const rect = valBar.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    brightness = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    drawWheel();
+    updateIndicators();
+    commit(true);
+  };
+  const close = () => {
+    pop.classList.remove('visible');
+    active = null;
+    wheelDrag = false;
+    valueDrag = false;
+  };
+  const open = swatch => {
+    active = swatch;
+    const hex = swatch.dataset.value || '#FFFFFF';
+    setFromHex(hex);
+    hexInput.value = hex.toUpperCase();
+    pop.classList.add('visible');
+    const swatchRect = swatch.getBoundingClientRect();
+    const popRect = pop.getBoundingClientRect();
+    let left = swatchRect.right + 8;
+    if (left + popRect.width > innerWidth - 6) left = swatchRect.left - popRect.width - 8;
+    const top = Math.max(6, Math.min(innerHeight - popRect.height - 6, swatchRect.top));
+    pop.style.left = `${Math.max(6, left)}px`;
+    pop.style.top = `${top}px`;
+    drawWheel();
+    updateIndicators();
+    debug('color picker opened', {key: swatch.dataset.configKey, value: hex});
+  };
+
+  swatches.forEach(swatch => {
+    swatch.addEventListener('click', event => {
+      event.stopPropagation();
+      if (pop.classList.contains('visible') && active === swatch) close();
+      else open(swatch);
+    });
   });
+  wheel.addEventListener('mousedown', event => {
+    if (event.button !== 0) return;
+    wheelDrag = true;
+    pickWheel(event);
+    event.preventDefault();
+  });
+  valBar.addEventListener('mousedown', event => {
+    if (event.button !== 0) return;
+    valueDrag = true;
+    pickValue(event);
+    event.preventDefault();
+  });
+  window.addEventListener('mousemove', event => {
+    if (wheelDrag) pickWheel(event);
+    if (valueDrag) pickValue(event);
+  });
+  window.addEventListener('mouseup', () => {
+    wheelDrag = false;
+    valueDrag = false;
+  });
+  hexInput.addEventListener('input', () => {
+    let value = hexInput.value.trim();
+    if (value && !value.startsWith('#')) value = '#' + value;
+    if (setFromHex(value)) commit(false);
+  });
+  pop.addEventListener('mousedown', event => event.stopPropagation());
+  document.addEventListener('mousedown', event => {
+    if (!pop.contains(event.target) && !event.target.closest?.('.config-color')) close();
+  });
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && pop.classList.contains('visible')) close();
+  });
+})();
+
+// Tell the native overlay that the generated DOM and visibility hook exist.
+// The overlay must not issue its one-time reveal before this message arrives:
+// WebView2 navigation is asynchronous and early evaluate_script calls are
+// otherwise silently ignored.
+debug('event bindings complete', {
+  fields: document.querySelectorAll('[data-config-key]').length,
+  sections: document.querySelectorAll('.section').length,
+  uiFound: Boolean(document.getElementById('ui'))
 });
+const readySent = ipc({type: 'ready'});
+console.log('[newbase menu] ready dispatched', {readySent});
+})();
 "#;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MenuCommand {
     None,
+    Ready,
     Quit,
     SetVisible(bool),
 }
@@ -180,6 +472,25 @@ pub(crate) fn apply_message(store: &mut ConfigStore, message: &str) -> Result<Me
     let payload: serde_json::Value =
         serde_json::from_str(message).map_err(|error| error.to_string())?;
     match payload.get("type").and_then(serde_json::Value::as_str) {
+        Some("debug") => {
+            let message = payload
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("(no message)");
+            let ready_state = payload
+                .get("readyState")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("unknown");
+            let details = payload
+                .get("details")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            log::info!(
+                "WebView menu HTML: {message} (readyState={ready_state}, details={details})"
+            );
+            Ok(MenuCommand::None)
+        }
+        Some("ready") => Ok(MenuCommand::Ready),
         Some("quit") => Ok(MenuCommand::Quit),
         Some("visibility") => Ok(MenuCommand::SetVisible(
             payload
@@ -321,12 +632,16 @@ fn render_field(key: &str, field: &FieldSchema, value: Option<&ConfigValue>) -> 
         ) => slider(key, *min, *max, *current, true),
         (WidgetType::ColorPicker, FieldType::Color, Some(ConfigValue::Color { r, g, b, a })) => {
             format!(
-                r##"<input class="config-color" type="color" data-config-key="{}" data-alpha="{}" value="#{:02X}{:02X}{:02X}">"##,
+                r##"<button type="button" class="color-swatch config-color" data-config-key="{}" data-alpha="{}" data-value="#{:02X}{:02X}{:02X}" style="background:#{:02X}{:02X}{:02X}" aria-label="Choose {}"></button>"##,
                 escape_attr(key),
                 a,
                 r,
                 g,
-                b
+                b,
+                r,
+                g,
+                b,
+                escape_attr(&field.metadata.display_name),
             )
         }
         (WidgetType::ComboBox, FieldType::Enum { variants }, Some(ConfigValue::Enum(current))) => {
@@ -490,8 +805,14 @@ category = "General"
         assert!(html.contains("data-config-key=\"visuals.enabled\""));
         assert!(html.contains("data-config-key=\"visuals.distance\""));
         assert!(html.contains("data-config-key=\"visuals.tint\""));
+        assert!(html.contains("class=\"color-swatch config-color\""));
+        assert!(html.contains("color picker opened"));
         assert!(html.contains("<select class=\"config-select\""));
         assert!(html.contains("Draw the overlay"));
+        assert!(html.contains("(() => {\nconst ipc = payload =>"));
+        assert!(html.contains("synthetic slider drag started"));
+        assert!(html.contains("input.style.setProperty('--fill'"));
+        assert_eq!(html.matches("<script>").count(), 1);
         assert!(!html.contains("{{"));
         assert!(!html.contains("id=\"splash\""));
     }
@@ -529,6 +850,11 @@ category = "General"
             "target/test-web-menu-ipc.toml",
         )
         .unwrap();
+
+        assert_eq!(
+            apply_message(&mut store, r#"{"type":"ready"}"#).unwrap(),
+            MenuCommand::Ready
+        );
 
         assert_eq!(
             apply_message(
