@@ -18,7 +18,7 @@ kill_game = []
 
 [dependencies]
 logic_system_macros = { path = "logic_system_macros" }
-memory = {version = "*", git = "https://github.com/NoctisMenu/memory.git", branch = "leakeddrv"} #mem access
+memory = { path = "memory" } #mem access
 windowing = { git = "https://github.com/NoctisMenu/windowing.git" } #cross platform window info struct\
 unreal-types = {git = "https://github.com/NoctisMenu/unreal.git", features = ["ue5","imgui"], default-features=false}
 unreal-esp = {git = "https://github.com/NoctisMenu/unreal.git", default-features=false, features = ["ue5"]}
@@ -54,6 +54,6 @@ winresource = "^0.1"
 serde_derive = "1.0.228"
 
 [workspace]
-members = [".", "logic_system_macros"]
+members = [".", "logic_system_macros", "memory", "memory/worker_dll"]
 exclude = ["newbase-example", "remote-call-demo"]
 resolver = "2"

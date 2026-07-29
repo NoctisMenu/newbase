@@ -401,7 +401,7 @@ dependencies = [
 [[package]]
 name = "composite"
 version = "0.2.0"
-source = "git+https://github.com/B1Fr0st/composite?branch=webview-texture#8265591476c78f9d48d2dd661309dbba243d75f1"
+source = "git+https://github.com/B1Fr0st/composite?branch=webview-texture#638906defde1c6d88052bb832a43ec74b247cc51"
 dependencies = [
  "imgui",
  "imgui-dx11-renderer",
@@ -624,7 +624,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -752,7 +752,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1409,7 +1409,7 @@ dependencies = [
 [[package]]
 name = "imgui-dx11-renderer"
 version = "0.8.0"
-source = "git+https://github.com/B1Fr0st/composite?branch=webview-texture#8265591476c78f9d48d2dd661309dbba243d75f1"
+source = "git+https://github.com/B1Fr0st/composite?branch=webview-texture#638906defde1c6d88052bb832a43ec74b247cc51"
 dependencies = [
  "imgui",
  "windows 0.36.1",
@@ -1708,6 +1708,13 @@ dependencies = [
 [[package]]
 name = "memory"
 version = "0.1.0"
+dependencies = [
+ "windows 0.62.2",
+]
+
+[[package]]
+name = "memory"
+version = "0.1.0"
 source = "git+https://github.com/NoctisMenu/memory.git?branch=leakeddrv#bf03b3064471a76ee68610b318ae351726e78091"
 dependencies = [
  "memory-macros",
@@ -1790,7 +1797,7 @@ dependencies = [
  "image",
  "log",
  "logic_system_macros",
- "memory",
+ "memory 0.1.0",
  "parking_lot 0.12.5",
  "rand",
  "serde",
@@ -2543,7 +2550,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3087,7 +3094,7 @@ dependencies = [
  "dashmap",
  "imgui",
  "log",
- "memory",
+ "memory 0.1.0 (git+https://github.com/NoctisMenu/memory.git?branch=leakeddrv)",
 ]
 
 [[package]]
@@ -3327,7 +3334,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3859,6 +3866,13 @@ name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+
+[[package]]
+name = "worker_dll"
+version = "0.1.0"
+dependencies = [
+ "windows 0.62.2",
+]
 
 [[package]]
 name = "writeable"
