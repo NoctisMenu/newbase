@@ -1,6 +1,6 @@
 use std::{
     sync::{Arc, Mutex},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use device_query::DeviceQuery;
@@ -431,6 +431,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         let mut web_menu_ready = false;
         let mut menu_revealed = false;
         let mut web_menu_visible = false;
+        let mut last_log_push = Instant::now();
+        const LOG_PUSH_INTERVAL: Duration = Duration::from_millis(500);
 
         loop {
             let start = std::time::Instant::now();
@@ -456,6 +458,9 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                     Ok(crate::app::web_menu::MenuCommand::Quit) => self.request_shutdown(),
                     Ok(crate::app::web_menu::MenuCommand::SetVisible(visible)) => {
                         self.visible = visible;
+                    }
+                    Ok(crate::app::web_menu::MenuCommand::SetLogLevel(level)) => {
+                        crate::app::log_capture::set_level(level);
                     }
                     Ok(crate::app::web_menu::MenuCommand::None) => {}
                     Err(error) => log::warn!("Ignoring WebView menu message: {error}"),
@@ -589,6 +594,16 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                     "window.__newbaseSetFps && window.__newbaseSetFps({});",
                     self.averaged_fps
                 ));
+            }
+
+            if web_menu_ready && last_log_push.elapsed() >= LOG_PUSH_INTERVAL {
+                last_log_push = Instant::now();
+                let json = crate::app::log_capture::drain_json();
+                if json != "[]" {
+                    overlay.eval(&format!(
+                        "window.__newbasePushLogs && window.__newbasePushLogs({json});"
+                    ));
+                }
             }
         }
     }

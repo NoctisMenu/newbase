@@ -23,6 +23,23 @@ const EXTRA_CSS: &str = r#"
 .config-slider input { width: 132px; }
 .config-readonly { color: var(--text-dim); font-family: ui-monospace, monospace; }
 .field-description { padding: 0 0 5px; color: var(--text-faint); font-size: 10.5px; }
+#log-panel { display: flex; flex-direction: column; margin-top: 6px; border-top: 1px solid var(--border); }
+#log-toolbar { display: flex; align-items: center; gap: 6px; padding: 5px 0; }
+#log-toolbar button { padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-raised); color: var(--text); font: inherit; font-size: 10px; cursor: pointer; }
+#log-level-wrap { position: relative; }
+#log-level-menu { display: none; position: absolute; bottom: 100%; left: 0; margin-bottom: 3px; flex-direction: column; min-width: 64px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); overflow: hidden; z-index: 20; }
+#log-level-menu.visible { display: flex; }
+#log-level-menu button { border: none; border-radius: 0; text-align: left; padding: 4px 8px; }
+#log-entries { display: none; height: 170px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 10px; line-height: 1.5; padding: 4px 0; }
+#log-entries.visible { display: block; }
+#log-entries .log-line { white-space: pre-wrap; word-break: break-all; padding: 0 2px; }
+#log-entries .log-error { color: #f87171; }
+#log-entries .log-warn { color: #fbbf24; }
+#log-entries .log-info { color: var(--text-dim); }
+#log-entries .log-debug { color: #6b7280; }
+#log-entries .log-trace { color: #4b5563; }
+#log-entries .log-time { color: var(--text-faint); margin-right: 4px; }
+#log-entries .log-src { color: var(--accent); margin-right: 4px; }
 "#;
 
 const MENU_SCRIPT: &str = r#"
@@ -416,6 +433,96 @@ debug('event bindings complete', {
   sections: document.querySelectorAll('.section').length,
   uiFound: Boolean(document.getElementById('ui'))
 });
+
+// --- Log viewer ---
+const LOG_RANK = {error: 1, warn: 2, info: 3, debug: 4, trace: 5};
+window.__logBuffer = [];
+window.__logLevel = 'info';
+const logEntriesEl = () => document.getElementById('log-entries');
+const logPasses = entry => (LOG_RANK[entry.l] || 5) <= (LOG_RANK[window.__logLevel] || 3);
+const logLineNode = entry => {
+  const line = document.createElement('div');
+  line.className = 'log-line log-' + entry.l;
+  const time = document.createElement('span');
+  time.className = 'log-time';
+  time.textContent = entry.t.toFixed(1) + 's';
+  const src = document.createElement('span');
+  src.className = 'log-src';
+  src.textContent = entry.src;
+  line.appendChild(time);
+  line.appendChild(src);
+  line.appendChild(document.createTextNode(entry.m));
+  return line;
+};
+const renderAllLogs = () => {
+  const container = logEntriesEl();
+  if (!container) return;
+  const visible = window.__logBuffer.filter(logPasses);
+  const slice = visible.length > 300 ? visible.slice(visible.length - 300) : visible;
+  const fragment = document.createDocumentFragment();
+  for (const entry of slice) fragment.appendChild(logLineNode(entry));
+  container.replaceChildren(fragment);
+  container.scrollTop = container.scrollHeight;
+};
+window.__newbasePushLogs = entries => {
+  const container = logEntriesEl();
+  if (!container || !entries.length) return;
+  const stickToBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 24;
+  const fragment = document.createDocumentFragment();
+  let appended = 0;
+  for (const entry of entries) {
+    window.__logBuffer.push(entry);
+    if (logPasses(entry)) { fragment.appendChild(logLineNode(entry)); appended++; }
+  }
+  if (window.__logBuffer.length > 600) window.__logBuffer.splice(0, window.__logBuffer.length - 600);
+  if (appended) {
+    container.appendChild(fragment);
+    while (container.children.length > 300) container.removeChild(container.firstChild);
+    if (stickToBottom) container.scrollTop = container.scrollHeight;
+  }
+};
+(() => {
+  const levelBtn = document.getElementById('log-level-btn');
+  const levelMenu = document.getElementById('log-level-menu');
+  const label = value => value.charAt(0).toUpperCase() + value.slice(1);
+  levelBtn?.addEventListener('click', event => {
+    event.stopPropagation();
+    levelMenu.classList.toggle('visible');
+  });
+  levelMenu?.querySelectorAll('button[data-level]').forEach(option => {
+    option.addEventListener('click', event => {
+      event.stopPropagation();
+      const level = option.dataset.level;
+      window.__logLevel = level;
+      levelBtn.textContent = label(level);
+      levelMenu.classList.remove('visible');
+      ipc({type: 'log_level', level});
+      renderAllLogs();
+    });
+  });
+  document.addEventListener('click', event => {
+    if (levelMenu && !levelMenu.contains(event.target) && event.target !== levelBtn) {
+      levelMenu.classList.remove('visible');
+    }
+  });
+})();
+document.getElementById('log-up')?.addEventListener('click', () => {
+  const container = logEntriesEl();
+  if (container) container.scrollBy({top: -60});
+});
+document.getElementById('log-down')?.addEventListener('click', () => {
+  const container = logEntriesEl();
+  if (container) container.scrollBy({top: 60});
+});
+document.getElementById('log-clear')?.addEventListener('click', () => {
+  window.__logBuffer = [];
+  const container = logEntriesEl();
+  if (container) container.replaceChildren();
+});
+document.getElementById('log-toggle')?.addEventListener('click', () => {
+  document.getElementById('log-entries')?.classList.toggle('visible');
+});
+
 const readySent = ipc({type: 'ready'});
 console.log('[newbase menu] ready dispatched', {readySent});
 })();
@@ -427,6 +534,7 @@ pub(crate) enum MenuCommand {
     Ready,
     Quit,
     SetVisible(bool),
+    SetLogLevel(log::LevelFilter),
 }
 
 pub(crate) fn build_html(store: &ConfigStore) -> String {
@@ -453,7 +561,9 @@ pub(crate) fn build_html(store: &ConfigStore) -> String {
     if let Some(body_open) = html.find("<div id=\"body\">") {
         let content_start = body_open + "<div id=\"body\">".len();
         if let Some(relative_end) = html[content_start..].find("</div><!-- #body -->") {
-            html.replace_range(content_start..content_start + relative_end, &sections);
+            let log_panel = r#"<div id="log-panel"><div id="log-toolbar"><button id="log-toggle" type="button">Logs</button><div id="log-level-wrap"><button id="log-level-btn" type="button">Info</button><div id="log-level-menu"><button type="button" data-level="error">Error</button><button type="button" data-level="warn">Warn</button><button type="button" data-level="info">Info</button><button type="button" data-level="debug">Debug</button><button type="button" data-level="trace">Trace</button></div></div><button id="log-up" type="button">&#9650;</button><button id="log-down" type="button">&#9660;</button><button id="log-clear" type="button">Clear</button></div><div id="log-entries"></div></div>"#;
+            let replacement = format!("{sections}{log_panel}");
+            html.replace_range(content_start..content_start + relative_end, &replacement);
         }
     }
 
@@ -543,6 +653,20 @@ pub(crate) fn apply_message(store: &mut ConfigStore, message: &str) -> Result<Me
             Ok(MenuCommand::None)
         }
         Some("js_error") => Err(format!("WebView JavaScript error: {payload}")),
+        Some("log_level") => {
+            let level = match payload
+                .get("level")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("info")
+            {
+                "error" => log::LevelFilter::Error,
+                "warn" => log::LevelFilter::Warn,
+                "debug" => log::LevelFilter::Debug,
+                "trace" => log::LevelFilter::Trace,
+                _ => log::LevelFilter::Info,
+            };
+            Ok(MenuCommand::SetLogLevel(level))
+        }
         _ => Ok(MenuCommand::None),
     }
 }

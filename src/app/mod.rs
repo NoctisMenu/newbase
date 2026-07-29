@@ -1,4 +1,3 @@
-use anyhow::Result;
 use newoverlay::imgui::TextureId;
 use windowing::WindowInfo;
 
@@ -7,6 +6,7 @@ use std::sync::Mutex;
 mod buffer;
 pub mod config_system;
 mod gui;
+pub mod log_capture;
 pub(crate) mod web_menu;
 pub use buffer::DoubleBuffer;
 use std::{
