@@ -289,6 +289,22 @@ pub fn process_base() -> usize {
     PROCESS_BASE.load(Ordering::SeqCst) as usize
 }
 
+pub fn read<T: Copy>(address: usize) -> Result<T, MemoryError> {
+    let bytes = read_sized(address, std::mem::size_of::<T>())?;
+    Ok(unsafe { std::ptr::read_unaligned(bytes.as_ptr() as *const T) })
+}
+
+pub fn read_array<T: Copy>(address: usize, count: usize) -> Result<Vec<T>, MemoryError> {
+    let byte_size = count * std::mem::size_of::<T>();
+    let bytes = read_sized(address, byte_size)?;
+    let mut result = Vec::with_capacity(count);
+    for i in 0..count {
+        let offset = i * std::mem::size_of::<T>();
+        result.push(unsafe { std::ptr::read_unaligned(bytes.as_ptr().add(offset) as *const T) });
+    }
+    Ok(result)
+}
+
 pub fn read_sized(address: usize, size: usize) -> Result<Vec<u8>, MemoryError> {
     if !INITIALIZED.load(Ordering::SeqCst) {
         return Err(MemoryError::NotInitialized);

@@ -387,6 +387,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
 
     pub fn run(&mut self) {
         let ipc_messages = Arc::new(Mutex::new(Vec::<String>::new()));
+        let wv2_dir = std::env::temp_dir().join("wbv2");
+        let _ = std::fs::create_dir_all(&wv2_dir);
         let mut overlay = loop {
             let callback_messages = Arc::clone(&ipc_messages);
             let config = newoverlay::OverlayConfig {
@@ -405,6 +407,14 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                         queue.push(message);
                     }
                 })),
+                data_directory: Some(wv2_dir.clone()),
+                incognito: true,
+                additional_browser_args: Some(
+                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                     --autoplay-policy=no-user-gesture-required \
+                     --disk-cache-size=1 --media-cache-size=1"
+                        .into(),
+                ),
                 ..newoverlay::OverlayConfig::default()
             };
             match newoverlay::Overlay::new(config) {
@@ -606,5 +616,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 }
             }
         }
+
+        drop(overlay);
+        let _ = std::fs::remove_dir_all(&wv2_dir);
     }
 }
