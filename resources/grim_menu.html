@@ -114,17 +114,7 @@
     display:grid;grid-template-columns:236px 1fr;align-items:center;
     padding:18px 20px 16px;gap:6px;
   }
-  .brand{display:flex;align-items:center;gap:12px}
-  .brand .logo{
-    width:44px;height:44px;border-radius:12px;flex-shrink:0;
-    background:radial-gradient(circle at 30% 25%,#3a3348,#171320);
-    border:1px solid var(--border-str);
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);overflow:hidden;
-    transition:transform .3s var(--spring-back);
-  }
-  .brand .logo:hover{transform:rotate(-6deg) scale(1.06)}
-  .brand .logo svg{width:30px;height:30px;opacity:.92}
+  .brand{display:flex;align-items:center}
   .brand .name{font-size:17px;font-weight:700;letter-spacing:-0.01em;line-height:1.15}
   .brand .ver{font-size:11px;color:var(--text-faint);margin-top:2px}
 
@@ -196,7 +186,6 @@
     border:1px solid var(--border-str);background:#000;box-shadow:0 0 0 2px var(--accent-soft)}
   .user .av img{width:100%;height:100%;display:block;object-fit:cover;image-rendering:pixelated}
   .user .u-name{font-size:13px;font-weight:600}
-  .user .u-uid{font-size:11px;color:var(--text-faint);margin-top:1px}
 
   /* ───────────  CARD GRID  ─────────── */
   .grid{
@@ -450,14 +439,6 @@
 <div class="panel" id="panel">
   <div class="top">
     <div class="brand">
-      <div class="logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#b9aee0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 5c0-1 1-2 2-1l2 2h8l2-2c1-1 2 0 2 1v6a8 8 0 0 1-16 0Z"/>
-          <circle cx="9" cy="10" r="1.1" fill="#b9aee0" stroke="none"/>
-          <circle cx="15" cy="10" r="1.1" fill="#b9aee0" stroke="none"/>
-          <path d="M10 15h4"/>
-        </svg>
-      </div>
       <div>
         <div class="name" id="brandName">Nimbus Menu</div>
         <div class="ver" id="brandVer">Version: 4.2</div>
@@ -542,7 +523,12 @@ const svg = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const SEND = p => { try { window.ipc.postMessage(JSON.stringify(p)); return true; } catch (e) { return false; } };
 window.addEventListener('error', ev => SEND({type:'js_error', message: ev.message||'error', filename: ev.filename||'', line: ev.lineno||0, column: ev.colno||0}));
 window.addEventListener('unhandledrejection', ev => SEND({type:'js_error', message:'Unhandled rejection: '+String(ev.reason)}));
-window.__newbaseSetFps   = fps => { const el=document.getElementById('fps-hud'); if(el) el.textContent=(Math.max(0,+fps||0)).toFixed(0)+' fps'; };
+window.__newbaseSetFps = (fps,trueFps) => {
+  const values={'fps-current':fps,'fps-true':trueFps};
+  for(const [id,value] of Object.entries(values)){
+    document.querySelectorAll(`[data-live="${id}"]`).forEach(el=>el.textContent=(Math.max(0,+value||0)).toFixed(0));
+  }
+};
 window.__newbasePushLogs = () => {};
 const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -578,7 +564,7 @@ function renderSide(){
   html+=`<div class="spacer"></div>
     <div class="user">
       <div class="av"><img src="${PROFILE_AVATAR}" alt="fr0st"></div>
-      <div><div class="u-name">fr0st</div><div class="u-uid">UID: 1</div></div>
+      <div><div class="u-name">fr0st</div></div>
     </div>`;
   side.insertAdjacentHTML('beforeend', html);
   side.querySelectorAll('.nav').forEach(n=>{
@@ -677,6 +663,8 @@ function buildBody(mod){
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="tog${s.value?' on':''}" data-key="${esc(s.key)}" data-role="bool"></div></div>`;
     } else if(s.kind==='number'){
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><span class="m-val m-drag" title="Drag left or right to change" data-key="${esc(s.key)}" data-type="${esc(s.numberType)}" data-value="${esc(s.value)}" data-min="${esc(s.min)}" data-max="${esc(s.max)}">${esc(String(s.value))}</span></div>`;
+    } else if(s.kind==='live'){
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><span class="m-val" data-live="${esc(s.liveId)}">${esc(String(s.value))}</span></div>`;
     } else {
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><span class="m-val">${esc(String(s.value))}</span></div>`;
     }

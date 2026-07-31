@@ -14,6 +14,7 @@ pub(crate) enum MenuCommand {
     SetVisible(bool),
     SetLogLevel(log::LevelFilter),
     SetSearchFocused(bool),
+    SetFpsDisplay(bool),
 }
 
 /// Build the menu HTML: the Nimbus template with the config schema injected as
@@ -42,7 +43,7 @@ pub(crate) fn build_menu_data(store: &ConfigStore) -> String {
         groups.entry(group).or_default().push((section_key, section));
     }
 
-    let categories: Vec<serde_json::Value> = groups
+    let mut categories: Vec<serde_json::Value> = groups
         .iter()
         .map(|(group_name, sections)| {
             let mut sections = sections.clone();
@@ -59,6 +60,27 @@ pub(crate) fn build_menu_data(store: &ConfigStore) -> String {
             })
         })
         .collect();
+
+    let fps_module = json!({
+        "key": "__nimbus_fps",
+        "name": "FPS Display",
+        "desc": "Shows live rendering performance",
+        "enabled": true,
+        "enabledKey": "__nimbus.fps_enabled",
+        "settings": [
+            {"label": "Display FPS", "kind": "live", "liveId": "fps-current", "value": 0},
+            {"label": "True FPS", "kind": "live", "liveId": "fps-true", "value": 0}
+        ],
+    });
+    if let Some(client) = categories.iter_mut().find(|category| category["id"] == "client") {
+        if let Some(modules) = client["modules"].as_array_mut() {
+            modules.push(fps_module);
+        }
+    } else {
+        categories.push(json!({
+            "id": "client", "name": "Client", "icon": "client", "modules": [fps_module],
+        }));
+    }
 
     json!({
         "brand": "Nimbus Menu",
@@ -235,6 +257,11 @@ pub(crate) fn apply_message(store: &mut ConfigStore, message: &str) -> Result<Me
                 .and_then(serde_json::Value::as_str)
                 .ok_or("config message has no key")?;
             let value = payload.get("value").ok_or("config message has no value")?;
+            if key == "__nimbus.fps_enabled" {
+                return Ok(MenuCommand::SetFpsDisplay(
+                    value.as_bool().ok_or("expected bool")?,
+                ));
+            }
             let field_type = store
                 .get_field_schema(key)
                 .map(|field| field.field_type.clone())
@@ -337,6 +364,7 @@ category = "General"
         assert!(data.contains("\"enabledKey\":\"skeleton_esp.enabled\""));
         assert!(data.contains("\"kind\":\"keybind\""));
         assert!(data.contains("\"kind\":\"color\""));
+        assert!(data.contains("\"name\":\"FPS Display\""));
     }
 
     #[test]
@@ -382,6 +410,14 @@ category = "General"
         assert_eq!(
             apply_message(&mut store, r#"{"type":"ready"}"#).unwrap(),
             MenuCommand::Ready
+        );
+        assert_eq!(
+            apply_message(
+                &mut store,
+                r#"{"type":"config","key":"__nimbus.fps_enabled","value":false}"#,
+            )
+            .unwrap(),
+            MenuCommand::SetFpsDisplay(false)
         );
         apply_message(
             &mut store,

@@ -368,24 +368,27 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         &self,
         ui: &newoverlay::imgui::Ui,
         draw_list: &newoverlay::imgui::DrawListMut,
+        show_fps: bool,
     ) {
-        draw_list.add_text(
-            [10.0, 250.0],
-            [1.0, 1.0, 1.0, 1.0],
-            format!("FPS: {:.0}", self.averaged_fps),
-        );
-        draw_list.add_text(
-            [10.0, 278.0],
-            [0.59, 0.59, 0.59, 1.0],
-            format!("True FPS: {:.0}", self.averaged_true_fps),
-        );
+        if show_fps {
+            draw_list.add_text(
+                [10.0, 250.0],
+                [1.0, 1.0, 1.0, 1.0],
+                format!("FPS: {:.0}", self.averaged_fps),
+            );
+            draw_list.add_text(
+                [10.0, 278.0],
+                [0.59, 0.59, 0.59, 1.0],
+                format!("True FPS: {:.0}", self.averaged_true_fps),
+            );
+        }
 
         if self.debug_lines.is_empty() {
             return;
         }
 
         const DEBUG_X: f32 = 10.0;
-        const DEBUG_Y: f32 = 312.0;
+        let debug_y = if show_fps { 312.0 } else { 250.0 };
         const DEBUG_LINE_GAP: f32 = 4.0;
         const DEBUG_PADDING_X: f32 = 8.0;
         const DEBUG_PADDING_Y: f32 = 6.0;
@@ -403,10 +406,10 @@ impl<S: 'static + Send + Sync> crate::App<S> {
 
         draw_list
             .add_rect(
-                [DEBUG_X - DEBUG_PADDING_X, DEBUG_Y - DEBUG_PADDING_Y],
+                [DEBUG_X - DEBUG_PADDING_X, debug_y - DEBUG_PADDING_Y],
                 [
                     DEBUG_X + max_width + DEBUG_PADDING_X,
-                    DEBUG_Y + total_height + DEBUG_PADDING_Y,
+                    debug_y + total_height + DEBUG_PADDING_Y,
                 ],
                 [0.0, 0.0, 0.0, 0.70],
             )
@@ -414,7 +417,7 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             .rounding(4.0)
             .build();
 
-        let mut y = DEBUG_Y;
+        let mut y = debug_y;
         for line in &self.debug_lines {
             draw_list.add_text([DEBUG_X, y], [1.0, 1.0, 1.0, 1.0], line);
             y += ui.calc_text_size(line)[1] + DEBUG_LINE_GAP;
@@ -479,6 +482,7 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         let mut web_menu_visible = false;
         let mut last_log_push = Instant::now();
         let mut search_focused = false;
+        let mut fps_display_enabled = true;
         let mut previous_keys = HashSet::new();
         const LOG_PUSH_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -513,6 +517,9 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                     Ok(crate::app::web_menu::MenuCommand::SetSearchFocused(focused)) => {
                         search_focused = focused;
                         previous_keys.clear();
+                    }
+                    Ok(crate::app::web_menu::MenuCommand::SetFpsDisplay(enabled)) => {
+                        fps_display_enabled = enabled;
                     }
                     Ok(crate::app::web_menu::MenuCommand::None) => {}
                     Err(error) => log::warn!("Ignoring WebView menu message: {error}"),
@@ -608,9 +615,9 @@ impl<S: 'static + Send + Sync> crate::App<S> {
 
                     if let Some(font) = self.fps_font {
                         let _font = ui.push_font(font);
-                        self.draw_perf_and_debug(ui, draw_list);
+                        self.draw_perf_and_debug(ui, draw_list, fps_display_enabled);
                     } else {
-                        self.draw_perf_and_debug(ui, draw_list);
+                        self.draw_perf_and_debug(ui, draw_list, fps_display_enabled);
                     }
                 }
 
@@ -657,8 +664,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
 
                 self.last_fps_update = Instant::now();
                 overlay.eval(&format!(
-                    "window.__newbaseSetFps && window.__newbaseSetFps({});",
-                    self.averaged_fps
+                    "window.__newbaseSetFps && window.__newbaseSetFps({},{});",
+                    self.averaged_fps, self.averaged_true_fps
                 ));
             }
 

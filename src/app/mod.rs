@@ -246,7 +246,7 @@ impl<S: Send + Sync + 'static> App<S> {
 
     /// Queue debug text for this frame.
     ///
-    /// Text is rendered by the overlay under the FPS counters and cleared each frame.
+    /// Text is rendered by the overlay near the optional FPS display and cleared each frame.
     pub fn debug_text(&mut self, text: impl Into<String>) {
         self.debug_lines.push(text.into());
     }
