@@ -14,7 +14,7 @@ pub(crate) enum MenuCommand {
     SetSearchFocused(bool),
 }
 
-/// Build the menu HTML: the Grim template with the config schema injected as
+/// Build the menu HTML: the Nimbus template with the config schema injected as
 /// `window.__GRIM_DATA`. All rendering/interaction lives in the template JS.
 pub(crate) fn build_html(store: &ConfigStore) -> String {
     TEMPLATE.replace("{{DATA}}", &build_menu_data(store))
@@ -56,7 +56,7 @@ pub(crate) fn build_menu_data(store: &ConfigStore) -> String {
         .collect();
 
     json!({
-        "brand": "Grim Client",
+        "brand": "Nimbus Menu",
         "version": "4.2",
         "categories": categories,
     })
@@ -133,9 +133,14 @@ fn build_setting(
             "key": key, "label": label, "kind": "enum",
             "value": as_string(value), "variants": variants,
         }),
-        FieldType::Int { .. } | FieldType::Float { .. } => {
-            json!({"key": key, "label": label, "kind": "slider", "value": value_display(value)})
-        }
+        FieldType::Int { min, max } => json!({
+            "key": key, "label": label, "kind": "number", "numberType": "int",
+            "value": numeric_value(value), "min": min, "max": max,
+        }),
+        FieldType::Float { min, max } => json!({
+            "key": key, "label": label, "kind": "number", "numberType": "float",
+            "value": numeric_value(value), "min": min, "max": max,
+        }),
         FieldType::String => {
             json!({"key": key, "label": label, "kind": "text", "value": as_string(value)})
         }
@@ -169,6 +174,14 @@ fn value_display(value: Option<&ConfigValue>) -> String {
         Some(ConfigValue::Enum(v) | ConfigValue::String(v)) => v.clone(),
         Some(ConfigValue::Color { r, g, b, .. }) => format!("#{r:02X}{g:02X}{b:02X}"),
         None => "—".to_owned(),
+    }
+}
+
+fn numeric_value(value: Option<&ConfigValue>) -> f64 {
+    match value {
+        Some(ConfigValue::Int(value)) => *value as f64,
+        Some(ConfigValue::Float(value)) => *value as f64,
+        _ => 0.0,
     }
 }
 
@@ -354,6 +367,12 @@ category = "General"
             "target/test-web-menu-ipc.toml",
         )
         .unwrap();
+
+        let data = build_menu_data(&store);
+        assert!(data.contains("\"kind\":\"number\""));
+        assert!(data.contains("\"numberType\":\"int\""));
+        assert!(data.contains("\"min\":0"));
+        assert!(data.contains("\"max\":10"));
 
         assert_eq!(
             apply_message(&mut store, r#"{"type":"ready"}"#).unwrap(),

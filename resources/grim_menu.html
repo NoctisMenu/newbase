@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Grim Client — GUI replica</title>
+<title>Nimbus Menu</title>
 <style>
   :root{
     --accent:      #8b5cf6;
@@ -81,7 +81,7 @@
   .panel{
     position:relative;
     width:min(960px,92vw);
-    background:linear-gradient(160deg, rgba(28,22,38,0.82), rgba(17,13,24,0.88));
+    background:linear-gradient(160deg, var(--panel-top), var(--panel-bot));
     border:1px solid var(--border);
     border-radius:var(--radius);
     box-shadow:
@@ -118,15 +118,17 @@
   .topbar .sep{color:var(--text-faint);font-size:13px}
   .topbar .cat-desc{font-size:13px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .topbar .cat-desc.anim{animation:descIn .26s ease both}
-  .topbar .search-btn{
+  .topbar .search-btn,.topbar .theme-btn{
     margin-left:auto;width:34px;height:34px;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;
     border-radius:9px;color:var(--text-dim);cursor:pointer;
     transition:background .15s, color .15s, transform .15s var(--spring-back);
   }
-  .topbar .search-btn:hover{background:var(--card-hover);color:var(--text)}
-  .topbar .search-btn:active{transform:scale(.86)}
-  .topbar .search-btn svg{width:17px;height:17px}
+  .topbar .search-btn:hover,.topbar .theme-btn:hover{background:var(--card-hover);color:var(--text)}
+  .topbar .search-btn:active,.topbar .theme-btn:active{transform:scale(.86)}
+  .topbar .search-btn svg,.topbar .theme-btn svg{width:17px;height:17px}
+  .topbar .theme-btn{margin-left:auto}
+  .topbar .search-btn{margin-left:0}
 
   .divider{height:1px;background:var(--border);margin:0 20px}
 
@@ -267,10 +269,32 @@
     font:inherit;font-size:12.5px;border-radius:7px;padding:4px 8px;outline:none;cursor:pointer;max-width:128px}
   .m-select:focus{border-color:var(--accent)}
   .m-val{font-size:12.5px;color:var(--text-dim)}
+  .m-drag{min-width:52px;padding:4px 7px;text-align:right;border-radius:7px;
+    border:1px solid transparent;background:var(--card);cursor:ew-resize;user-select:none;
+    font-variant-numeric:tabular-nums;transition:border-color .15s,background .15s,color .15s}
+  .m-drag:hover{color:var(--text);border-color:var(--border-str);background:var(--card-hover)}
+  .m-drag.dragging{color:#fff;border-color:var(--accent);background:var(--accent-soft)}
   .dot{width:15px;height:15px;border-radius:50%;background:var(--accent);
     box-shadow:0 0 0 3px var(--accent-soft);cursor:pointer;
     transition:transform .2s var(--spring-back),box-shadow .2s}
   .dot:hover{transform:scale(1.15);box-shadow:0 0 0 5px var(--accent-soft)}
+
+  .color-picker{position:fixed;z-index:90;width:196px;padding:14px;background:var(--pop);
+    border:1px solid var(--border-str);border-radius:15px;box-shadow:0 26px 70px -18px rgba(0,0,0,.8);
+    opacity:0;visibility:hidden;transform:translateY(-6px) scale(.96);transform-origin:top right;
+    transition:opacity .16s,visibility .16s,transform .22s var(--spring)}
+  .color-picker.show{opacity:1;visibility:visible;transform:none}
+  .cp-wheel-wrap{position:relative;width:168px;height:168px;user-select:none}
+  .cp-wheel{display:block;width:168px;height:168px;border-radius:50%;cursor:crosshair}
+  .cp-cursor{position:absolute;width:13px;height:13px;border:2px solid #fff;border-radius:50%;
+    pointer-events:none;transform:translate(-50%,-50%);box-shadow:0 0 0 1px #000,0 2px 5px rgba(0,0,0,.5)}
+  .cp-value{height:11px;margin-top:12px;border-radius:6px;position:relative;cursor:ew-resize;
+    border:1px solid var(--border-str)}
+  .cp-value::after{content:'';position:absolute;left:var(--value-pos,100%);top:50%;width:12px;height:16px;
+    border:2px solid #fff;border-radius:6px;transform:translate(-50%,-50%);box-shadow:0 0 0 1px #000}
+  .cp-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+  .cp-label{font-size:11px;color:var(--text-faint)}
+  .cp-hex{font-size:12px;color:var(--text);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 
   /* toggle */
   .tog{width:38px;height:21px;border-radius:11px;background:rgba(255,255,255,0.14);
@@ -366,6 +390,25 @@
   .s-empty{padding:14px;color:var(--text-faint);font-size:13px;text-align:center;
     animation:itemIn .26s ease both}
 
+  .theme-panel{position:absolute;z-index:42;right:20px;top:70px;width:250px;
+    padding:15px;background:var(--pop);border:1px solid var(--border-str);border-radius:15px;
+    box-shadow:0 24px 70px -18px rgba(0,0,0,.75);opacity:0;visibility:hidden;
+    transform:translateY(-8px) scale(.96);transform-origin:top right;
+    transition:opacity .18s,visibility .18s,transform .25s var(--spring)}
+  .theme-panel.show{opacity:1;visibility:visible;transform:none}
+  .theme-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+  .theme-title{font-size:14px;font-weight:650}
+  .theme-reset{font:inherit;font-size:11px;color:var(--text-dim);background:var(--card);
+    border:1px solid var(--border);border-radius:7px;padding:4px 7px;cursor:pointer}
+  .theme-reset:hover{color:var(--text);border-color:var(--border-str)}
+  .theme-group+.theme-group{margin-top:13px}
+  .theme-label{font-size:11px;color:var(--text-faint);margin-bottom:7px}
+  .theme-swatches{display:flex;gap:8px}
+  .theme-swatch{width:25px;height:25px;border-radius:8px;border:1px solid rgba(255,255,255,.16);
+    cursor:pointer;transition:transform .15s,box-shadow .15s}
+  .theme-swatch:hover{transform:translateY(-2px)}
+  .theme-swatch.active{box-shadow:0 0 0 2px var(--pop),0 0 0 4px var(--accent)}
+
   .hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
     font-size:12px;color:rgba(255,255,255,.55);letter-spacing:.02em}
   .hint b{color:#fff;font-weight:600}
@@ -390,7 +433,7 @@
         </svg>
       </div>
       <div>
-        <div class="name" id="brandName">Grim Client</div>
+        <div class="name" id="brandName">Nimbus Menu</div>
         <div class="ver" id="brandVer">Version: 4.2</div>
       </div>
     </div>
@@ -400,6 +443,9 @@
       <span class="cat-name" id="catName">Combat</span>
       <span class="sep">•</span>
       <span class="cat-desc" id="catDesc">Automatically hits entity when in range</span>
+      <div class="theme-btn" id="themeBtn" title="Customize colors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
+      </div>
       <div class="search-btn" id="searchBtn" title="Search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </div>
@@ -422,6 +468,12 @@
       <div class="s-results" id="sResults"></div>
     </div>
   </div>
+  <div class="theme-panel" id="themePanel">
+    <div class="theme-head"><span class="theme-title">Menu colors</span><button class="theme-reset" id="themeReset">Reset</button></div>
+    <div class="theme-group"><div class="theme-label">Accent</div><div class="theme-swatches" id="accentSwatches"></div></div>
+    <div class="theme-group"><div class="theme-label">Surface</div><div class="theme-swatches" id="surfaceSwatches"></div></div>
+    <div class="theme-group"><div class="theme-label">Text</div><div class="theme-swatches" id="textSwatches"></div></div>
+  </div>
 </div><!-- panel -->
 </div><!-- stage -->
 
@@ -434,6 +486,12 @@
   <div class="m-title" id="mTitle"></div>
   <div class="m-desc" id="mDesc"></div>
   <div class="m-body" id="mBody"></div>
+</div>
+
+<div id="colorPicker" class="color-picker">
+  <div class="cp-wheel-wrap"><canvas id="colorWheel" class="cp-wheel" width="168" height="168"></canvas><div id="colorCursor" class="cp-cursor"></div></div>
+  <div id="colorValue" class="cp-value"></div>
+  <div class="cp-footer"><span class="cp-label">Brightness</span><span id="colorHex" class="cp-hex">#FFFFFF</span></div>
 </div>
 
 <div class="hint">Press <b>Insert</b> to toggle · click a <b>module</b> to open its settings · click the <b>search</b> icon</div>
@@ -584,12 +642,14 @@ function buildBody(mod){
   }
   (mod.settings||[]).forEach(s=>{
     if(s.kind==='color'){
-      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="dot" style="background:${esc(s.value||'#8b5cf6')}"></div></div>`;
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="dot" title="Open HSV color picker" data-key="${esc(s.key)}" style="background:${esc(s.value||'#8b5cf6')}"></div></div>`;
     } else if(s.kind==='keybind' || s.kind==='enum'){
       const opts=(s.variants||[]).map(v=>`<option value="${esc(v)}"${v===s.value?' selected':''}>${esc(v)}</option>`).join('');
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><select class="m-select" data-key="${esc(s.key)}">${opts}</select></div>`;
     } else if(s.kind==='toggle'){
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="tog${s.value?' on':''}" data-key="${esc(s.key)}" data-role="bool"></div></div>`;
+    } else if(s.kind==='number'){
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><span class="m-val m-drag" title="Drag left or right to change" data-key="${esc(s.key)}" data-type="${esc(s.numberType)}" data-value="${esc(s.value)}" data-min="${esc(s.min)}" data-max="${esc(s.max)}">${esc(String(s.value))}</span></div>`;
     } else {
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><span class="m-val">${esc(String(s.value))}</span></div>`;
     }
@@ -611,6 +671,35 @@ function wireBody(){
   });
   mBody.querySelectorAll('.m-select').forEach(sel=>{
     sel.onchange = ()=> SEND({type:'config', key:sel.dataset.key, value:sel.value});
+  });
+  mBody.querySelectorAll('.dot[data-key]').forEach(dot=>{
+    dot.onclick=e=>{e.stopPropagation();openColorPicker(dot,(openMod.settings||[]).find(s=>s.key===dot.dataset.key));};
+  });
+  mBody.querySelectorAll('.m-drag[data-key]').forEach(valueEl=>{
+    const min=+valueEl.dataset.min, max=+valueEl.dataset.max;
+    const isInt=valueEl.dataset.type==='int';
+    const range=Math.max(max-min,1), step=isInt?1:(range<=1?.01:range<=10?.05:range<=100?.1:1);
+    const display=value=>isInt?String(Math.round(value)):value.toFixed(step<.1?2:step<1?1:0).replace(/\.0+$/,'');
+    let dragging=false,startX=0,startValue=0,lastValue=+valueEl.dataset.value;
+    valueEl.textContent=display(lastValue);
+    valueEl.onmousedown=e=>{
+      if(e.button!==0)return;
+      dragging=true;startX=e.clientX;startValue=lastValue;
+      valueEl.classList.add('dragging');e.preventDefault();e.stopPropagation();
+    };
+    document.addEventListener('mousemove',e=>{
+      if(!dragging)return;
+      let next=startValue+(e.clientX-startX)*(range/200);
+      next=Math.min(max,Math.max(min,Math.round(next/step)*step));
+      if(isInt)next=Math.round(next);
+      if(next===lastValue)return;
+      lastValue=next;valueEl.dataset.value=next;valueEl.textContent=display(next);
+      SEND({type:'config',key:valueEl.dataset.key,value:next});
+    });
+    document.addEventListener('mouseup',()=>{
+      if(!dragging)return;
+      dragging=false;valueEl.classList.remove('dragging');
+    });
   });
 }
 
@@ -682,8 +771,56 @@ function shrinkMorph(){                           // shrink + fade the open sett
 
 document.getElementById('mClose').onclick = closeModule;
 
+/* ── menu theme customization ── */
+const themePanel = document.getElementById('themePanel');
+const THEME_DEFAULT = {accent:0,surface:0,text:0};
+const THEME_OPTIONS = {
+  accent:['#8b5cf6','#0ea5e9','#14b8a6','#f97316','#ec4899'],
+  surface:[
+    {swatch:'#211b2c',top:'rgba(33,27,44,.86)',bot:'rgba(20,16,27,.88)',pop:'#1b1626'},
+    {swatch:'#101b2c',top:'rgba(16,27,44,.88)',bot:'rgba(8,15,27,.90)',pop:'#0d1726'},
+    {swatch:'#102622',top:'rgba(16,38,34,.88)',bot:'rgba(8,23,21,.90)',pop:'#0d211d'},
+    {swatch:'#27221c',top:'rgba(39,34,28,.88)',bot:'rgba(24,20,16,.90)',pop:'#211c17'},
+    {swatch:'#22242a',top:'rgba(34,36,42,.88)',bot:'rgba(18,19,23,.90)',pop:'#1b1d22'}
+  ],
+  text:[
+    {swatch:'#f2f1f6',main:'#f2f1f6',dim:'#928d9d',faint:'#6c6678'},
+    {swatch:'#e8f3ff',main:'#e8f3ff',dim:'#92a9bd',faint:'#62798d'},
+    {swatch:'#e8fff8',main:'#e8fff8',dim:'#8eaea5',faint:'#607d75'},
+    {swatch:'#fff3e8',main:'#fff3e8',dim:'#b09d8d',faint:'#7e6d60'}
+  ]
+};
+let menuTheme = {...THEME_DEFAULT};
+try{ menuTheme={...menuTheme,...JSON.parse(localStorage.getItem('nimbus-theme')||'{}')}; }catch(_){}
+function hexRgb(hex){return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));}
+function applyTheme(save=true){
+  const root=document.documentElement.style;
+  const accent=THEME_OPTIONS.accent[menuTheme.accent]||THEME_OPTIONS.accent[0];
+  const [r,g,b]=hexRgb(accent), surface=THEME_OPTIONS.surface[menuTheme.surface]||THEME_OPTIONS.surface[0];
+  const text=THEME_OPTIONS.text[menuTheme.text]||THEME_OPTIONS.text[0];
+  root.setProperty('--accent',accent); root.setProperty('--accent-br',`rgb(${Math.min(r+26,255)},${Math.min(g+26,255)},${Math.min(b+26,255)})`);
+  root.setProperty('--accent-soft',`rgba(${r},${g},${b},.16)`);
+  root.setProperty('--panel-top',surface.top); root.setProperty('--panel-bot',surface.bot); root.setProperty('--pop',surface.pop);
+  root.setProperty('--text',text.main); root.setProperty('--text-dim',text.dim); root.setProperty('--text-faint',text.faint);
+  document.querySelectorAll('.theme-swatch').forEach(el=>el.classList.toggle('active',+el.dataset.index===menuTheme[el.dataset.group]));
+  if(save) try{localStorage.setItem('nimbus-theme',JSON.stringify(menuTheme));}catch(_){}
+}
+function buildThemeSwatches(group,id){
+  const options=THEME_OPTIONS[group];
+  document.getElementById(id).innerHTML=options.map((option,index)=>{
+    const color=typeof option==='string'?option:option.swatch;
+    return `<button class="theme-swatch" data-group="${group}" data-index="${index}" style="background:${color}" title="Select ${group} color"></button>`;
+  }).join('');
+}
+buildThemeSwatches('accent','accentSwatches'); buildThemeSwatches('surface','surfaceSwatches'); buildThemeSwatches('text','textSwatches');
+themePanel.querySelectorAll('.theme-swatch').forEach(el=>el.onclick=()=>{menuTheme[el.dataset.group]=+el.dataset.index;applyTheme();});
+document.getElementById('themeBtn').onclick=e=>{e.stopPropagation();themePanel.classList.toggle('show');};
+document.getElementById('themeReset').onclick=()=>{menuTheme={...THEME_DEFAULT};applyTheme();};
+applyTheme(false);
+
 /* click anywhere outside the settings panel / a card dismisses it */
 document.addEventListener('mousedown', e=>{
+  if(!e.target.closest('#themePanel')&&!e.target.closest('#themeBtn')) themePanel.classList.remove('show');
   if(!openMod) return;                         // opening click fires before openMod is set
   if(e.target.closest('#morph')) return;       // interacting with the settings panel
   if(e.target.closest('.mod'))   return;       // switching to another card (its onclick handles it)
