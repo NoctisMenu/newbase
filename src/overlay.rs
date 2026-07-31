@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -369,18 +369,68 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         ui: &newoverlay::imgui::Ui,
         draw_list: &newoverlay::imgui::DrawListMut,
         show_fps: bool,
+        histogram: bool,
+        fps_history: &VecDeque<f32>,
     ) {
         if show_fps {
-            draw_list.add_text(
-                [10.0, 250.0],
-                [1.0, 1.0, 1.0, 1.0],
-                format!("FPS: {:.0}", self.averaged_fps),
-            );
-            draw_list.add_text(
-                [10.0, 278.0],
-                [0.59, 0.59, 0.59, 1.0],
-                format!("True FPS: {:.0}", self.averaged_true_fps),
-            );
+            if histogram {
+                const X: f32 = 10.0;
+                const Y: f32 = 250.0;
+                const W: f32 = 190.0;
+                const H: f32 = 76.0;
+                const GRAPH_X: f32 = X + 7.0;
+                const GRAPH_Y: f32 = Y + 24.0;
+                const GRAPH_W: f32 = 142.0;
+                const GRAPH_H: f32 = 44.0;
+                draw_list
+                    .add_rect([X, Y], [X + W, Y + H], [0.0, 0.0, 0.0, 0.48])
+                    .filled(true)
+                    .build();
+                draw_list.add_text([X + 7.0, Y + 5.0], [1.0, 1.0, 1.0, 0.92], "Client FPS");
+                draw_list
+                    .add_rect(
+                        [GRAPH_X, GRAPH_Y],
+                        [GRAPH_X + GRAPH_W, GRAPH_Y + GRAPH_H],
+                        [1.0, 1.0, 1.0, 0.58],
+                    )
+                    .build();
+                draw_list.add_text(
+                    [X + 157.0, GRAPH_Y + 13.0],
+                    [1.0, 1.0, 1.0, 0.95],
+                    format!("{:.0}", self.averaged_fps),
+                );
+                if fps_history.len() > 1 {
+                    let low = fps_history.iter().copied().fold(f32::INFINITY, f32::min);
+                    let high = fps_history.iter().copied().fold(0.0_f32, f32::max);
+                    let padding = ((high - low) * 0.25).max(5.0);
+                    let min = (low - padding).max(0.0);
+                    let span = (high + padding - min).max(1.0);
+                    let count = fps_history.len() - 1;
+                    let points: Vec<[f32; 2]> = fps_history
+                        .iter()
+                        .enumerate()
+                        .map(|(index, fps)| {
+                            let x = GRAPH_X + index as f32 / count as f32 * GRAPH_W;
+                            let y = GRAPH_Y + GRAPH_H - ((*fps - min) / span).clamp(0.0, 1.0) * GRAPH_H;
+                            [x, y]
+                        })
+                        .collect();
+                    for pair in points.windows(2) {
+                        draw_list.add_line(pair[0], pair[1], [1.0, 1.0, 1.0, 0.9]).thickness(1.0).build();
+                    }
+                }
+            } else {
+                draw_list.add_text(
+                    [10.0, 250.0],
+                    [1.0, 1.0, 1.0, 1.0],
+                    format!("FPS: {:.0}", self.averaged_fps),
+                );
+                draw_list.add_text(
+                    [10.0, 278.0],
+                    [0.59, 0.59, 0.59, 1.0],
+                    format!("True FPS: {:.0}", self.averaged_true_fps),
+                );
+            }
         }
 
         if self.debug_lines.is_empty() {
@@ -388,7 +438,7 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         }
 
         const DEBUG_X: f32 = 10.0;
-        let debug_y = if show_fps { 312.0 } else { 250.0 };
+        let debug_y = if show_fps && histogram { 340.0 } else if show_fps { 312.0 } else { 250.0 };
         const DEBUG_LINE_GAP: f32 = 4.0;
         const DEBUG_PADDING_X: f32 = 8.0;
         const DEBUG_PADDING_Y: f32 = 6.0;
@@ -483,6 +533,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         let mut last_log_push = Instant::now();
         let mut search_focused = false;
         let mut fps_display_enabled = true;
+        let mut fps_histogram_enabled = false;
+        let mut fps_history = VecDeque::with_capacity(80);
         let mut previous_keys = HashSet::new();
         const LOG_PUSH_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -520,6 +572,9 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                     }
                     Ok(crate::app::web_menu::MenuCommand::SetFpsDisplay(enabled)) => {
                         fps_display_enabled = enabled;
+                    }
+                    Ok(crate::app::web_menu::MenuCommand::SetFpsHistogram(enabled)) => {
+                        fps_histogram_enabled = enabled;
                     }
                     Ok(crate::app::web_menu::MenuCommand::None) => {}
                     Err(error) => log::warn!("Ignoring WebView menu message: {error}"),
@@ -615,9 +670,21 @@ impl<S: 'static + Send + Sync> crate::App<S> {
 
                     if let Some(font) = self.fps_font {
                         let _font = ui.push_font(font);
-                        self.draw_perf_and_debug(ui, draw_list, fps_display_enabled);
+                        self.draw_perf_and_debug(
+                            ui,
+                            draw_list,
+                            fps_display_enabled,
+                            fps_histogram_enabled,
+                            &fps_history,
+                        );
                     } else {
-                        self.draw_perf_and_debug(ui, draw_list, fps_display_enabled);
+                        self.draw_perf_and_debug(
+                            ui,
+                            draw_list,
+                            fps_display_enabled,
+                            fps_histogram_enabled,
+                            &fps_history,
+                        );
                     }
                 }
 
@@ -648,6 +715,10 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                         .sum::<f32>()
                         / self.frame_samples.len() as f32;
                     self.averaged_fps = 1.0 / avg_frametime;
+                    if fps_history.len() == 80 {
+                        fps_history.pop_front();
+                    }
+                    fps_history.push_back(self.averaged_fps);
                     self.frame_samples.clear();
                 }
 

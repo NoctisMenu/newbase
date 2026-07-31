@@ -15,6 +15,7 @@ pub(crate) enum MenuCommand {
     SetLogLevel(log::LevelFilter),
     SetSearchFocused(bool),
     SetFpsDisplay(bool),
+    SetFpsHistogram(bool),
 }
 
 /// Build the menu HTML: the Nimbus template with the config schema injected as
@@ -68,6 +69,7 @@ pub(crate) fn build_menu_data(store: &ConfigStore) -> String {
         "enabled": true,
         "enabledKey": "__nimbus.fps_enabled",
         "settings": [
+            {"key": "__nimbus.fps_mode", "label": "Display Mode", "kind": "enum", "value": "Text", "variants": ["Text", "Histogram"]},
             {"label": "Display FPS", "kind": "live", "liveId": "fps-current", "value": 0},
             {"label": "True FPS", "kind": "live", "liveId": "fps-true", "value": 0}
         ],
@@ -262,6 +264,13 @@ pub(crate) fn apply_message(store: &mut ConfigStore, message: &str) -> Result<Me
                     value.as_bool().ok_or("expected bool")?,
                 ));
             }
+            if key == "__nimbus.fps_mode" {
+                return Ok(MenuCommand::SetFpsHistogram(match value.as_str() {
+                    Some("Text") => false,
+                    Some("Histogram") => true,
+                    _ => return Err("expected Text or Histogram".to_owned()),
+                }));
+            }
             let field_type = store
                 .get_field_schema(key)
                 .map(|field| field.field_type.clone())
@@ -418,6 +427,14 @@ category = "General"
             )
             .unwrap(),
             MenuCommand::SetFpsDisplay(false)
+        );
+        assert_eq!(
+            apply_message(
+                &mut store,
+                r#"{"type":"config","key":"__nimbus.fps_mode","value":"Histogram"}"#,
+            )
+            .unwrap(),
+            MenuCommand::SetFpsHistogram(true)
         );
         apply_message(
             &mut store,

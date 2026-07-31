@@ -745,7 +745,11 @@ function wireBody(){
     };
   });
   mBody.querySelectorAll('.m-select').forEach(sel=>{
-    sel.onchange = ()=> SEND({type:'config', key:sel.dataset.key, value:sel.value});
+    sel.onchange = ()=>{
+      const setting=openMod&&(openMod.settings||[]).find(s=>s.key===sel.dataset.key);
+      if(setting)setting.value=sel.value;
+      SEND({type:'config', key:sel.dataset.key, value:sel.value});
+    };
   });
   mBody.querySelectorAll('.dot[data-key]').forEach(dot=>{
     dot.onclick=e=>{e.stopPropagation();openColorPicker(dot,(openMod.settings||[]).find(s=>s.key===dot.dataset.key));};
