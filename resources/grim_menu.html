@@ -36,13 +36,8 @@
     -webkit-font-smoothing:antialiased;
     color:var(--text);
     display:flex;align-items:center;justify-content:center;
-    background:
-      linear-gradient(180deg, #5c3f92 0%, #5c3f92 58%, #6f9648 58%, #4f6f34 100%);
+    background:transparent;               /* overlay: game shows through */
     overflow:hidden;
-  }
-  body::before{
-    content:'';position:fixed;inset:0;pointer-events:none;
-    background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.28) 100%);
   }
 
   /* ─────────────────────────  ENTRANCE  ─────────────────────────── */
@@ -86,15 +81,15 @@
   .panel{
     position:relative;
     width:min(960px,92vw);
-    background:linear-gradient(160deg,var(--panel-top),var(--panel-bot));
+    background:linear-gradient(160deg, rgba(28,22,38,0.82), rgba(17,13,24,0.88));
     border:1px solid var(--border);
     border-radius:var(--radius);
     box-shadow:
       0 40px 120px -20px rgba(0,0,0,0.65),
       inset 0 1px 0 rgba(255,255,255,0.06);
     overflow:hidden;
-    -webkit-backdrop-filter:blur(14px);
-    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(22px) saturate(140%);
+    backdrop-filter:blur(22px) saturate(140%);
     animation:panelIn .55s var(--spring) both;
   }
 
@@ -459,9 +454,10 @@ const I = {
 const svg = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 
 /* ── native bridge ───────────────────────────────────────────── */
-const ipc = p => { try { window.ipc.postMessage(JSON.stringify(p)); return true; } catch (e) { return false; } };
-window.addEventListener('error', ev => ipc({type:'js_error', message: ev.message||'error', filename: ev.filename||'', line: ev.lineno||0, column: ev.colno||0}));
-window.addEventListener('unhandledrejection', ev => ipc({type:'js_error', message:'Unhandled rejection: '+String(ev.reason)}));
+/* the host injects a global `ipc`; use a distinct name to avoid redeclaration */
+const SEND = p => { try { window.ipc.postMessage(JSON.stringify(p)); return true; } catch (e) { return false; } };
+window.addEventListener('error', ev => SEND({type:'js_error', message: ev.message||'error', filename: ev.filename||'', line: ev.lineno||0, column: ev.colno||0}));
+window.addEventListener('unhandledrejection', ev => SEND({type:'js_error', message:'Unhandled rejection: '+String(ev.reason)}));
 window.__newbaseSetFps   = fps => { const el=document.getElementById('fps-hud'); if(el) el.textContent=(Math.max(0,+fps||0)).toFixed(0)+' fps'; };
 window.__newbasePushLogs = () => {};
 const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -609,12 +605,12 @@ function wireBody(){
     t.onclick = ()=>{
       const on = !t.classList.contains('on');
       t.classList.toggle('on', on);
-      ipc({type:'config', key:t.dataset.key, value:on});
+      SEND({type:'config', key:t.dataset.key, value:on});
       if(t.dataset.role==='enabled' && openMod){ openMod.enabled=on; markCard(openMod.key,on); }
     };
   });
   mBody.querySelectorAll('.m-select').forEach(sel=>{
-    sel.onchange = ()=> ipc({type:'config', key:sel.dataset.key, value:sel.value});
+    sel.onchange = ()=> SEND({type:'config', key:sel.dataset.key, value:sel.value});
   });
 }
 
@@ -743,7 +739,7 @@ function applyMenu(v){
     stage.style.animation = 'menuClose .28s ease both';
   }
 }
-function toggleMenu(){ applyMenu(!menuVisible); ipc({type:'visibility', visible:menuVisible}); }
+function toggleMenu(){ applyMenu(!menuVisible); SEND({type:'visibility', visible:menuVisible}); }
 window.__newbaseSetVisible = v => { applyMenu(!!v); return true; };
 stage.addEventListener('animationend', e=>{
   if(e.target === stage && !menuVisible) stage.style.display = 'none';   // hide after shrink
@@ -759,7 +755,7 @@ renderSide();
 renderGrid();
 setHeader();
 requestAnimationFrame(()=> requestAnimationFrame(moveIndicator));
-ipc({type:'ready'});
+SEND({type:'ready'});
 </script>
 </body>
 </html>
