@@ -11,6 +11,7 @@ pub(crate) enum MenuCommand {
     Quit,
     SetVisible(bool),
     SetLogLevel(log::LevelFilter),
+    SetSearchFocused(bool),
 }
 
 /// Build the menu HTML: the Grim template with the config schema injected as
@@ -208,6 +209,8 @@ pub(crate) fn apply_message(store: &mut ConfigStore, message: &str) -> Result<Me
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(true),
         )),
+        Some("search_focus") => Ok(MenuCommand::SetSearchFocused(true)),
+        Some("search_blur") => Ok(MenuCommand::SetSearchFocused(false)),
         Some("config") => {
             let key = payload
                 .get("key")

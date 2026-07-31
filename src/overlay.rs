@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -57,6 +58,41 @@ const VERSION_BANNER: &str = match std::str::from_utf8(BANNER_BUF.0.split_at(BAN
     Ok(s) => s,
     Err(_) => "OFFLINE",
 };
+
+fn search_key_input(
+    key: device_query::Keycode,
+    shifted: bool,
+) -> Option<(&'static str, &'static str)> {
+    use device_query::Keycode::*;
+    let text = match key {
+        A => "a", B => "b", C => "c", D => "d", E => "e", F => "f", G => "g",
+        H => "h", I => "i", J => "j", K => "k", L => "l", M => "m", N => "n",
+        O => "o", P => "p", Q => "q", R => "r", S => "s", T => "t", U => "u",
+        V => "v", W => "w", X => "x", Y => "y", Z => "z",
+        Key0 => if shifted { ")" } else { "0" },
+        Key1 => if shifted { "!" } else { "1" },
+        Key2 => if shifted { "@" } else { "2" },
+        Key3 => if shifted { "#" } else { "3" },
+        Key4 => if shifted { "$" } else { "4" },
+        Key5 => if shifted { "%" } else { "5" },
+        Key6 => if shifted { "^" } else { "6" },
+        Key7 => if shifted { "&" } else { "7" },
+        Key8 => if shifted { "*" } else { "8" },
+        Key9 => if shifted { "(" } else { "9" },
+        Space => " ",
+        Minus => if shifted { "_" } else { "-" },
+        _ => "",
+    };
+    if !text.is_empty() {
+        return Some(("Character", text));
+    }
+    match key {
+        Backspace => Some(("Backspace", "")),
+        Delete => Some(("Delete", "")),
+        Escape => Some(("Escape", "")),
+        _ => None,
+    }
+}
 
 /// Runs before any page-owned JavaScript, so navigation and parse failures can
 /// still reach the native log even when the generated menu script never starts.
@@ -442,6 +478,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         let mut menu_revealed = false;
         let mut web_menu_visible = false;
         let mut last_log_push = Instant::now();
+        let mut search_focused = false;
+        let mut previous_keys = HashSet::new();
         const LOG_PUSH_INTERVAL: Duration = Duration::from_millis(500);
 
         loop {
@@ -472,6 +510,10 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                     Ok(crate::app::web_menu::MenuCommand::SetLogLevel(level)) => {
                         crate::app::log_capture::set_level(level);
                     }
+                    Ok(crate::app::web_menu::MenuCommand::SetSearchFocused(focused)) => {
+                        search_focused = focused;
+                        previous_keys.clear();
+                    }
                     Ok(crate::app::web_menu::MenuCommand::None) => {}
                     Err(error) => log::warn!("Ignoring WebView menu message: {error}"),
                 }
@@ -493,9 +535,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 continue;
             }
 
-            if self
-                .device_state
-                .get_keys()
+            let current_keys: HashSet<_> = self.device_state.get_keys().into_iter().collect();
+            if current_keys
                 .contains(&device_query::Keycode::Insert)
                 && self.show_time.elapsed().as_millis() > 250
             {
@@ -503,6 +544,21 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 self.show_time = std::time::Instant::now();
                 log::info!("WebView menu visibility toggled to {}", self.visible);
             }
+
+            if search_focused {
+                let shifted = current_keys.contains(&device_query::Keycode::LShift)
+                    || current_keys.contains(&device_query::Keycode::RShift);
+                for key in current_keys.difference(&previous_keys) {
+                    if let Some((name, text)) = search_key_input(*key, shifted) {
+                        let name = serde_json::to_string(name).unwrap_or_else(|_| "\"\"".into());
+                        let text = serde_json::to_string(text).unwrap_or_else(|_| "\"\"".into());
+                        overlay.eval(&format!(
+                            "window.__newbaseSearchKey && window.__newbaseSearchKey({name},{text});"
+                        ));
+                    }
+                }
+            }
+            previous_keys = current_keys;
 
             // Set window size to match game window size (x axis+1 to avoid glfw passthrough blackout bug)
             // Cache window info updates to ~10Hz to avoid expensive Windows API calls every frame

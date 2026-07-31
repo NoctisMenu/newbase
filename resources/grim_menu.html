@@ -694,6 +694,28 @@ document.addEventListener('mousedown', e=>{
 const sWrap  = document.getElementById('searchWrap');
 const sInput = document.getElementById('searchInput');
 const sRes   = document.getElementById('sResults');
+sInput.addEventListener('focus', ()=>SEND({type:'search_focus'}));
+sInput.addEventListener('blur',  ()=>SEND({type:'search_blur'}));
+/* The menu is rendered in an off-screen WebView. Its mouse input is forwarded
+   by the host, but Windows keyboard focus stays with the game. The host calls
+   this entry point with the keys it observes while this input is focused. */
+window.__newbaseSearchKey = (key, text='') => {
+  if(document.activeElement !== sInput) return false;
+  if(key === 'Backspace'){
+    const a=sInput.selectionStart, b=sInput.selectionEnd;
+    if(a !== b) sInput.setRangeText('',a,b,'end');
+    else if(a > 0) sInput.setRangeText('',a-1,a,'end');
+  }else if(key === 'Delete'){
+    const a=sInput.selectionStart, b=sInput.selectionEnd;
+    sInput.setRangeText('',a,b === a ? a+1 : b,'end');
+  }else if(key === 'Escape'){
+    sWrap.classList.remove('show'); sInput.blur(); return true;
+  }else if(text){
+    sInput.setRangeText(text,sInput.selectionStart,sInput.selectionEnd,'end');
+  }else return false;
+  sInput.dispatchEvent(new Event('input',{bubbles:true}));
+  return true;
+};
 document.getElementById('searchBtn').onclick = ()=>{
   sWrap.classList.add('show'); sInput.value=''; sRes.classList.remove('show'); sRes.innerHTML='';
   setTimeout(()=>sInput.focus(),60);
