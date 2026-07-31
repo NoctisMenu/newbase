@@ -1641,6 +1641,7 @@ name = "newbase"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "composite",
  "device_query",
  "image",

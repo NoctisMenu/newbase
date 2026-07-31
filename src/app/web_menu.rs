@@ -1,8 +1,10 @@
 use super::config_system::{ConfigSection, ConfigStore, ConfigValue, FieldSchema, FieldType, Key};
+use base64::Engine;
 use serde_json::json;
 use std::collections::BTreeMap;
 
 const TEMPLATE: &str = include_str!("../../resources/grim_menu.html");
+const PROFILE_AVATAR: &[u8] = include_bytes!("../../resources/fr0st-avatar.png");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MenuCommand {
@@ -17,7 +19,10 @@ pub(crate) enum MenuCommand {
 /// Build the menu HTML: the Nimbus template with the config schema injected as
 /// `window.__GRIM_DATA`. All rendering/interaction lives in the template JS.
 pub(crate) fn build_html(store: &ConfigStore) -> String {
-    TEMPLATE.replace("{{DATA}}", &build_menu_data(store))
+    let avatar = base64::engine::general_purpose::STANDARD.encode(PROFILE_AVATAR);
+    TEMPLATE
+        .replace("{{DATA}}", &build_menu_data(store))
+        .replace("{{AVATAR}}", &avatar)
 }
 
 /// Serialize the config schema into the JSON the template renders from:

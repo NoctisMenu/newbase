@@ -55,6 +55,14 @@
     0%  {opacity:1;transform:scale(1)}
     100%{opacity:0;transform:scale(.86)}
   }
+  @keyframes cloudReveal{
+    0%{opacity:0;transform:scale(.58);filter:blur(38px)}
+    28%{opacity:.78}
+    72%{opacity:.42}
+    100%{opacity:0;transform:scale(1.34);filter:blur(64px)}
+  }
+  @keyframes valueSettle{0%{transform:scale(1.08)}55%{transform:scale(.97)}100%{transform:none}}
+  @keyframes boundaryPulse{50%{box-shadow:0 0 0 4px var(--accent-soft),inset 0 0 12px var(--accent-soft)}}
   @keyframes cardIn{
     from{opacity:0;transform:translateY(9px)}
     to  {opacity:1;transform:none}
@@ -77,9 +85,18 @@
   }
 
   /* ─────────────────────────  MAIN PANEL  ───────────────────────── */
-  .stage{position:relative}
+  .stage{position:relative;isolation:isolate}
+  .stage::before,.stage::after{content:'';position:absolute;z-index:0;pointer-events:none;
+    inset:-90px -120px;border-radius:45%;opacity:0}
+  .stage::before{background:
+    radial-gradient(ellipse at 24% 54%,rgba(255,255,255,.22) 0 12%,var(--accent-soft) 32%,transparent 67%),
+    radial-gradient(ellipse at 70% 42%,var(--accent-soft) 0 20%,rgba(255,255,255,.12) 40%,transparent 70%)}
+  .stage::after{inset:-60px -80px;background:
+    radial-gradient(ellipse at 52% 45%,rgba(255,255,255,.15),var(--accent-soft) 38%,transparent 72%)}
+  .stage.cloud-opening::before{animation:cloudReveal .72s ease-out both}
+  .stage.cloud-opening::after{animation:cloudReveal .62s ease-out .08s both}
   .panel{
-    position:relative;
+    position:relative;z-index:1;
     width:min(960px,92vw);
     background:linear-gradient(160deg, var(--panel-top), var(--panel-bot));
     border:1px solid var(--border);
@@ -175,9 +192,9 @@
     display:flex;align-items:center;gap:12px;padding:8px;margin-top:8px;
     border-top:1px solid var(--border);padding-top:16px;
   }
-  .user .av{width:30px;height:30px;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;color:var(--text-dim)}
-  .user .av svg{width:20px;height:20px}
+  .user .av{width:34px;height:34px;border-radius:50%;flex-shrink:0;overflow:hidden;
+    border:1px solid var(--border-str);background:#000;box-shadow:0 0 0 2px var(--accent-soft)}
+  .user .av img{width:100%;height:100%;display:block;object-fit:cover;image-rendering:pixelated}
   .user .u-name{font-size:13px;font-weight:600}
   .user .u-uid{font-size:11px;color:var(--text-faint);margin-top:1px}
 
@@ -271,19 +288,28 @@
   .m-val{font-size:12.5px;color:var(--text-dim)}
   .m-drag{min-width:52px;padding:4px 7px;text-align:right;border-radius:7px;
     border:1px solid transparent;background:var(--card);cursor:ew-resize;user-select:none;
-    font-variant-numeric:tabular-nums;transition:border-color .15s,background .15s,color .15s}
+    font-variant-numeric:tabular-nums;transition:border-color .15s,background .15s,color .15s,transform .15s,box-shadow .15s}
   .m-drag:hover{color:var(--text);border-color:var(--border-str);background:var(--card-hover)}
-  .m-drag.dragging{color:#fff;border-color:var(--accent);background:var(--accent-soft)}
+  .m-drag.dragging{color:#fff;border-color:var(--accent);transform:scale(1.08);min-width:68px;
+    background:
+      repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 1px,transparent 1px 8px),
+      linear-gradient(90deg,var(--accent-soft) 0 var(--value-progress,0%),rgba(255,255,255,.025) var(--value-progress,0%))}
+  .m-drag.at-limit{animation:boundaryPulse .34s ease-in-out infinite alternate}
+  .m-drag.settling{animation:valueSettle .24s var(--spring-back)}
   .dot{width:15px;height:15px;border-radius:50%;background:var(--accent);
     box-shadow:0 0 0 3px var(--accent-soft);cursor:pointer;
     transition:transform .2s var(--spring-back),box-shadow .2s}
   .dot:hover{transform:scale(1.15);box-shadow:0 0 0 5px var(--accent-soft)}
 
   .color-picker{position:fixed;z-index:90;width:196px;padding:14px;background:var(--pop);
-    border:1px solid var(--border-str);border-radius:15px;box-shadow:0 26px 70px -18px rgba(0,0,0,.8);
+    --picker-rgb:139,92,246;border:1px solid rgba(var(--picker-rgb),.48);border-radius:15px;
+    box-shadow:0 26px 70px -18px rgba(0,0,0,.8),0 0 34px -8px rgba(var(--picker-rgb),.56);
     opacity:0;visibility:hidden;transform:translateY(-6px) scale(.96);transform-origin:top right;
     transition:opacity .16s,visibility .16s,transform .22s var(--spring)}
   .color-picker.show{opacity:1;visibility:visible;transform:none}
+  .color-picker::before{content:'';position:absolute;z-index:-1;inset:-30px;border-radius:32px;pointer-events:none;
+    background:radial-gradient(circle at 50% 42%,rgba(var(--picker-rgb),.3),transparent 68%);
+    filter:blur(12px);opacity:.9;transition:background .12s}
   .cp-wheel-wrap{position:relative;width:168px;height:168px;user-select:none}
   .cp-wheel{display:block;width:168px;height:168px;border-radius:50%;cursor:crosshair}
   .cp-cursor{position:absolute;width:13px;height:13px;border:2px solid #fff;border-radius:50%;
@@ -420,7 +446,7 @@
 </head>
 <body>
 
-<div class="stage">
+<div class="stage cloud-opening">
 <div class="panel" id="panel">
   <div class="top">
     <div class="brand">
@@ -496,7 +522,7 @@
 
 <div class="hint">Press <b>Insert</b> to toggle · click a <b>module</b> to open its settings · click the <b>search</b> icon</div>
 
-<script>window.__GRIM_DATA = {{DATA}};</script>
+<script>window.__GRIM_DATA = {{DATA}};window.__NIMBUS_AVATAR='data:image/png;base64,{{AVATAR}}';</script>
 <script>
 /* ── icon set (lucide-ish) ───────────────────────────────────── */
 const I = {
@@ -525,6 +551,7 @@ I.default = '<rect x="4" y="4" width="16" height="16" rx="5"/>';
 /* ── data (config schema, injected by Rust) ──────────────────── */
 const DATA = (window.__GRIM_DATA && window.__GRIM_DATA.categories) ? window.__GRIM_DATA : {categories:[]};
 const CATS = DATA.categories.map(c => ({id:c.id, name:c.name, icon:c.icon||c.id}));
+const PROFILE_AVATAR = window.__NIMBUS_AVATAR || '';
 const MODS = {};
 DATA.categories.forEach(c => { MODS[c.id] = c.modules || []; });
 function iconFor(catId){ const c=CATS.find(x=>x.id===catId); const k=(c&&c.icon)||catId; return I[k]||I[catId]||I.default; }
@@ -550,8 +577,8 @@ function renderSide(){
   });
   html+=`<div class="spacer"></div>
     <div class="user">
-      <div class="av">${svg('<circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/>')}</div>
-      <div><div class="u-name">vvv</div><div class="u-uid">UID: 1</div></div>
+      <div class="av"><img src="${PROFILE_AVATAR}" alt="fr0st"></div>
+      <div><div class="u-name">fr0st</div><div class="u-uid">UID: 1</div></div>
     </div>`;
   side.insertAdjacentHTML('beforeend', html);
   side.querySelectorAll('.nav').forEach(n=>{
@@ -660,6 +687,66 @@ function markCard(key,on){
   const card=[...grid.querySelectorAll('.mod')].find(el=>el.dataset.key===key);
   if(card) card.classList.toggle('on', on);
 }
+
+const colorPicker=document.getElementById('colorPicker'),colorWheel=document.getElementById('colorWheel');
+const colorCtx=colorWheel.getContext('2d'),colorCursor=document.getElementById('colorCursor');
+const colorValue=document.getElementById('colorValue'),colorHex=document.getElementById('colorHex');
+const COLOR_SIZE=168,COLOR_RADIUS=84;
+let colorH=0,colorS=1,colorV=1,activeColor=null,wheelDragging=false,valueDragging=false;
+function hsvRgb(h,s,v){
+  const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let r=0,g=0,b=0;
+  if(h<60){r=c;g=x}else if(h<120){r=x;g=c}else if(h<180){g=c;b=x}
+  else if(h<240){g=x;b=c}else if(h<300){r=x;b=c}else{r=c;b=x}
+  return [r,g,b].map(n=>Math.round((n+m)*255));
+}
+function rgbHsv(r,g,b){
+  r/=255;g/=255;b/=255;const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;let h=0;
+  if(d){if(max===r)h=60*((g-b)/d%6);else if(max===g)h=60*((b-r)/d+2);else h=60*((r-g)/d+4);}
+  if(h<0)h+=360;return [h,max?d/max:0,max];
+}
+const rgbHex=(r,g,b)=>'#'+[r,g,b].map(n=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
+function drawColorWheel(){
+  const image=colorCtx.createImageData(COLOR_SIZE,COLOR_SIZE),data=image.data;
+  for(let y=0;y<COLOR_SIZE;y++)for(let x=0;x<COLOR_SIZE;x++){
+    const dx=x-COLOR_RADIUS,dy=y-COLOR_RADIUS,d=Math.sqrt(dx*dx+dy*dy),i=(y*COLOR_SIZE+x)*4;
+    if(d>COLOR_RADIUS){data[i+3]=0;continue;}
+    let h=Math.atan2(dy,dx)*180/Math.PI;if(h<0)h+=360;
+    const [r,g,b]=hsvRgb(h,Math.min(1,d/COLOR_RADIUS),colorV);
+    data[i]=r;data[i+1]=g;data[i+2]=b;data[i+3]=d>COLOR_RADIUS-1?Math.max(0,(COLOR_RADIUS-d)*255):255;
+  }
+  colorCtx.putImageData(image,0,0);
+}
+function refreshColorPicker(commit=false){
+  const rad=colorH*Math.PI/180,[r,g,b]=hsvRgb(colorH,colorS,colorV),[vr,vg,vb]=hsvRgb(colorH,colorS,1);
+  colorCursor.style.left=COLOR_RADIUS+Math.cos(rad)*colorS*COLOR_RADIUS+'px';
+  colorCursor.style.top=COLOR_RADIUS+Math.sin(rad)*colorS*COLOR_RADIUS+'px';colorCursor.style.background=`rgb(${r},${g},${b})`;
+  colorValue.style.background=`linear-gradient(to right,#000,rgb(${vr},${vg},${vb}))`;
+  colorValue.style.setProperty('--value-pos',colorV*100+'%');const hex=rgbHex(r,g,b);colorHex.textContent=hex;
+  colorPicker.style.setProperty('--picker-rgb',`${r},${g},${b}`);
+  if(commit&&activeColor){activeColor.dot.style.background=hex;activeColor.setting.value=hex;SEND({type:'config',key:activeColor.dot.dataset.key,value:{r,g,b,a:255}});}
+}
+function openColorPicker(dot,setting){
+  if(!setting)return;const hex=setting.value||'#8B5CF6',n=parseInt(hex.slice(1),16);
+  [colorH,colorS,colorV]=rgbHsv((n>>16)&255,(n>>8)&255,n&255);activeColor={dot,setting};
+  const rect=dot.getBoundingClientRect();colorPicker.style.left=Math.max(8,Math.min(innerWidth-204,rect.right-196))+'px';
+  colorPicker.style.top=Math.max(8,Math.min(innerHeight-230,rect.bottom+7))+'px';
+  drawColorWheel();refreshColorPicker();colorPicker.classList.add('show');
+}
+function closeColorPicker(){colorPicker.classList.remove('show');activeColor=null;wheelDragging=valueDragging=false;}
+function pickColorWheel(e){
+  const rect=colorWheel.getBoundingClientRect(),x=e.clientX-rect.left-COLOR_RADIUS,y=e.clientY-rect.top-COLOR_RADIUS;
+  colorS=Math.min(1,Math.sqrt(x*x+y*y)/COLOR_RADIUS);colorH=Math.atan2(y,x)*180/Math.PI;if(colorH<0)colorH+=360;
+  refreshColorPicker(true);
+}
+function pickColorValue(e){
+  const rect=colorValue.getBoundingClientRect();colorV=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  drawColorWheel();refreshColorPicker(true);
+}
+colorWheel.onmousedown=e=>{if(e.button!==0)return;wheelDragging=true;pickColorWheel(e);e.preventDefault();e.stopPropagation();};
+colorValue.onmousedown=e=>{if(e.button!==0)return;valueDragging=true;pickColorValue(e);e.preventDefault();e.stopPropagation();};
+document.addEventListener('mousemove',e=>{if(wheelDragging)pickColorWheel(e);if(valueDragging)pickColorValue(e);});
+document.addEventListener('mouseup',()=>{wheelDragging=false;valueDragging=false;});
+
 function wireBody(){
   mBody.querySelectorAll('.tog[data-key]').forEach(t=>{
     t.onclick = ()=>{
@@ -682,6 +769,7 @@ function wireBody(){
     const display=value=>isInt?String(Math.round(value)):value.toFixed(step<.1?2:step<1?1:0).replace(/\.0+$/,'');
     let dragging=false,startX=0,startValue=0,lastValue=+valueEl.dataset.value;
     valueEl.textContent=display(lastValue);
+    valueEl.style.setProperty('--value-progress',((lastValue-min)/range*100)+'%');
     valueEl.onmousedown=e=>{
       if(e.button!==0)return;
       dragging=true;startX=e.clientX;startValue=lastValue;
@@ -692,13 +780,18 @@ function wireBody(){
       let next=startValue+(e.clientX-startX)*(range/200);
       next=Math.min(max,Math.max(min,Math.round(next/step)*step));
       if(isInt)next=Math.round(next);
+      const atLimit=next<=min||next>=max;
+      valueEl.classList.toggle('at-limit',atLimit);
+      valueEl.style.setProperty('--value-progress',((next-min)/range*100)+'%');
       if(next===lastValue)return;
       lastValue=next;valueEl.dataset.value=next;valueEl.textContent=display(next);
       SEND({type:'config',key:valueEl.dataset.key,value:next});
     });
     document.addEventListener('mouseup',()=>{
       if(!dragging)return;
-      dragging=false;valueEl.classList.remove('dragging');
+      dragging=false;valueEl.classList.remove('dragging','at-limit');
+      valueEl.classList.remove('settling');void valueEl.offsetWidth;valueEl.classList.add('settling');
+      setTimeout(()=>valueEl.classList.remove('settling'),260);
     });
   });
 }
@@ -736,6 +829,7 @@ function openModule(cardEl, mod){
 }
 
 function closeModule(){
+  closeColorPicker();
   if(!openMod) return;
   const cardEl = sourceCard;
   openMod = null;
@@ -751,6 +845,7 @@ function closeModule(){
 }
 
 function resetMorph(){                            // instant teardown (category switch)
+  closeColorPicker();
   clearTimeout(closeTimer);
   morph.style.animation = '';
   morph.classList.remove('active','settings');
@@ -821,7 +916,9 @@ applyTheme(false);
 /* click anywhere outside the settings panel / a card dismisses it */
 document.addEventListener('mousedown', e=>{
   if(!e.target.closest('#themePanel')&&!e.target.closest('#themeBtn')) themePanel.classList.remove('show');
+  if(!e.target.closest('#colorPicker')&&!e.target.closest('.dot')) closeColorPicker();
   if(!openMod) return;                         // opening click fires before openMod is set
+  if(e.target.closest('#colorPicker')) return;
   if(e.target.closest('#morph')) return;       // interacting with the settings panel
   if(e.target.closest('.mod'))   return;       // switching to another card (its onclick handles it)
   closeModule();
@@ -891,8 +988,10 @@ function applyMenu(v){
   stage.style.animation = 'none'; void stage.offsetWidth;   // restart cleanly
   if(v){
     stage.style.display = '';
+    stage.classList.remove('cloud-opening'); void stage.offsetWidth; stage.classList.add('cloud-opening');
     stage.style.animation = 'menuOpen .42s var(--spring) both';
   }else{
+    stage.classList.remove('cloud-opening');
     sWrap.classList.remove('show');
     shrinkMorph();
     stage.style.animation = 'menuClose .28s ease both';
