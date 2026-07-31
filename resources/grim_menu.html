@@ -271,9 +271,22 @@
   .p-row .p-ext{color:var(--text-dim);cursor:pointer;transition:color .15s,transform .2s var(--spring-back)}
   .p-row .p-ext:hover{color:var(--text);transform:translate(1px,-1px)}
   .p-row .p-ext svg{width:16px;height:16px;display:block}
-  .m-select{background:var(--card-hover);border:1px solid var(--border);color:var(--text);
-    font:inherit;font-size:12.5px;border-radius:7px;padding:4px 8px;outline:none;cursor:pointer;max-width:128px}
-  .m-select:focus{border-color:var(--accent)}
+  .m-dropdown{position:relative;min-width:92px;max-width:138px;font-size:12.5px}
+  .m-drop-trigger{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:var(--card-hover);border:1px solid var(--border);color:var(--text);font:inherit;
+    border-radius:7px;padding:5px 8px;cursor:pointer;text-align:left}
+  .m-drop-trigger::after{content:'';width:6px;height:6px;border-right:1.5px solid var(--text-dim);
+    border-bottom:1.5px solid var(--text-dim);transform:rotate(45deg) translateY(-2px);transition:transform .18s}
+  .m-dropdown.open .m-drop-trigger{border-color:var(--accent)}
+  .m-dropdown.open .m-drop-trigger::after{transform:rotate(225deg) translate(-1px,-1px)}
+  .m-drop-options{position:absolute;z-index:80;right:0;top:calc(100% + 5px);min-width:100%;max-height:180px;
+    overflow-y:auto;padding:4px;background:var(--pop);border:1px solid var(--border-str);border-radius:9px;
+    box-shadow:0 14px 36px -12px rgba(0,0,0,.85);opacity:0;visibility:hidden;transform:translateY(-4px);
+    transition:opacity .14s,visibility .14s,transform .18s var(--spring)}
+  .m-dropdown.open .m-drop-options{opacity:1;visibility:visible;transform:none}
+  .m-drop-option{padding:6px 8px;border-radius:6px;color:var(--text-dim);cursor:pointer;white-space:nowrap}
+  .m-drop-option:hover{background:var(--card-hover);color:var(--text)}
+  .m-drop-option.selected{background:var(--accent-soft);color:var(--text)}
   .m-val{font-size:12.5px;color:var(--text-dim)}
   .m-drag{min-width:52px;padding:4px 7px;text-align:right;border-radius:7px;
     border:1px solid transparent;background:var(--card);cursor:ew-resize;user-select:none;
@@ -346,7 +359,7 @@
     border-radius:16px;
     box-shadow:0 30px 80px -20px rgba(0,0,0,0.75);
     padding:16px 18px;
-    pointer-events:auto;
+    pointer-events:auto;overflow:visible;
   }
   .m-title{font-size:14.5px;font-weight:600;letter-spacing:-0.005em;
     transition:font-size .35s var(--spring-back), color .3s, margin .4s ease}
@@ -363,7 +376,7 @@
   .m-x svg{width:14px;height:14px}
   .morph.settings .m-x{opacity:1}
   .m-body{opacity:0;max-height:0;overflow:hidden;transition:opacity .3s ease .06s}
-  .morph.settings .m-body{opacity:1;max-height:320px}
+  .morph.settings .m-body{opacity:1;max-height:320px;overflow:visible}
   .morph.settings .m-body .p-row{animation:rowIn .34s var(--spring) both}
   .morph.settings .m-body .p-row:nth-of-type(1){animation-delay:.16s}
   .morph.settings .m-body .p-row:nth-of-type(2){animation-delay:.22s}
@@ -657,8 +670,8 @@ function buildBody(mod){
     if(s.kind==='color'){
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="dot" title="Open HSV color picker" data-key="${esc(s.key)}" style="background:${esc(s.value||'#8b5cf6')}"></div></div>`;
     } else if(s.kind==='keybind' || s.kind==='enum'){
-      const opts=(s.variants||[]).map(v=>`<option value="${esc(v)}"${v===s.value?' selected':''}>${esc(v)}</option>`).join('');
-      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><select class="m-select" data-key="${esc(s.key)}">${opts}</select></div>`;
+      const opts=(s.variants||[]).map(v=>`<div class="m-drop-option${v===s.value?' selected':''}" data-value="${esc(v)}">${esc(v)}</div>`).join('');
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="m-dropdown" data-key="${esc(s.key)}"><button type="button" class="m-drop-trigger">${esc(s.value)}</button><div class="m-drop-options">${opts}</div></div></div>`;
     } else if(s.kind==='toggle'){
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="tog${s.value?' on':''}" data-key="${esc(s.key)}" data-role="bool"></div></div>`;
     } else if(s.kind==='number'){
@@ -744,12 +757,23 @@ function wireBody(){
       if(t.dataset.role==='enabled' && openMod){ openMod.enabled=on; markCard(openMod.key,on); }
     };
   });
-  mBody.querySelectorAll('.m-select').forEach(sel=>{
-    sel.onchange = ()=>{
-      const setting=openMod&&(openMod.settings||[]).find(s=>s.key===sel.dataset.key);
-      if(setting)setting.value=sel.value;
-      SEND({type:'config', key:sel.dataset.key, value:sel.value});
+  mBody.querySelectorAll('.m-dropdown').forEach(drop=>{
+    const trigger=drop.querySelector('.m-drop-trigger');
+    trigger.onclick=e=>{
+      e.stopPropagation();
+      mBody.querySelectorAll('.m-dropdown.open').forEach(other=>{if(other!==drop)other.classList.remove('open');});
+      drop.classList.toggle('open');
     };
+    drop.querySelectorAll('.m-drop-option').forEach(option=>{
+      option.onclick=e=>{
+        e.stopPropagation();const value=option.dataset.value;
+        trigger.textContent=value;drop.classList.remove('open');
+        drop.querySelectorAll('.m-drop-option').forEach(item=>item.classList.toggle('selected',item===option));
+        const setting=openMod&&(openMod.settings||[]).find(s=>s.key===drop.dataset.key);
+        if(setting)setting.value=value;
+        SEND({type:'config',key:drop.dataset.key,value});
+      };
+    });
   });
   mBody.querySelectorAll('.dot[data-key]').forEach(dot=>{
     dot.onclick=e=>{e.stopPropagation();openColorPicker(dot,(openMod.settings||[]).find(s=>s.key===dot.dataset.key));};
@@ -909,6 +933,7 @@ applyTheme(false);
 document.addEventListener('mousedown', e=>{
   if(!e.target.closest('#themePanel')&&!e.target.closest('#themeBtn')) themePanel.classList.remove('show');
   if(!e.target.closest('#colorPicker')&&!e.target.closest('.dot')) closeColorPicker();
+  if(!e.target.closest('.m-dropdown')) document.querySelectorAll('.m-dropdown.open').forEach(drop=>drop.classList.remove('open'));
   if(!openMod) return;                         // opening click fires before openMod is set
   if(e.target.closest('#colorPicker')) return;
   if(e.target.closest('#morph')) return;       // interacting with the settings panel
