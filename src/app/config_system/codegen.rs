@@ -52,6 +52,13 @@ pub fn regenerate_generated_files_from_paths(
     Ok(())
 }
 
+/// Section-qualified constant identifier, e.g. ("aimbot", "enabled") -> "AIMBOT_ENABLED".
+/// Qualifying by section keeps constants unique when field names repeat across
+/// sections (every module has its own `enabled`).
+fn const_ident(section: &str, field: &str) -> String {
+    format!("{section}_{field}").to_uppercase().replace('-', "_")
+}
+
 fn generate_keys_source(schema: &toml::Value) -> String {
     let mut output = String::from("// Auto-generated config key constants\n");
     output.push_str("// DO NOT EDIT - Generated from config_schema.toml\n");
@@ -67,7 +74,7 @@ fn generate_keys_source(schema: &toml::Value) -> String {
 
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for field_name in fields.keys() {
-                    let const_name = field_name.to_uppercase();
+                    let const_name = const_ident(section_name, field_name);
                     let key_value = format!("{}.{}", section_name, field_name);
 
                     output.push_str(&format!(
@@ -100,7 +107,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
     output.push_str("macro_rules! config {\n");
 
     if let Some(sections) = schema.get("sections").and_then(|s| s.as_table()) {
-        for (_, section_data) in sections {
+        for (section_name, section_data) in sections {
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for (field_name, field_data) in fields {
                     if let Some(public) = field_data.get("public").and_then(|p| p.as_bool())
@@ -109,7 +116,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
                         continue;
                     }
 
-                    let const_name = field_name.to_uppercase();
+                    let const_name = const_ident(section_name, field_name);
                     let field_type = field_data
                         .get("type")
                         .and_then(|t| t.as_str())
@@ -149,7 +156,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
 
                     output.push_str(&format!(
                         "    ($app:expr, \"{}\") => {{\n        $app.config_store.read().{}($crate::app::config_system::keys::{}).unwrap_or({})\n    }};\n",
-                        field_name, getter, const_name, default
+                        format!("{}.{}", section_name, field_name), getter, const_name, default
                     ));
                 }
             }
@@ -168,7 +175,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
     output.push_str("macro_rules! config_get {\n");
 
     if let Some(sections) = schema.get("sections").and_then(|s| s.as_table()) {
-        for (_, section_data) in sections {
+        for (section_name, section_data) in sections {
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for (field_name, field_data) in fields {
                     if let Some(public) = field_data.get("public").and_then(|p| p.as_bool())
@@ -177,7 +184,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
                         continue;
                     }
 
-                    let const_name = field_name.to_uppercase();
+                    let const_name = const_ident(section_name, field_name);
                     let field_type = field_data
                         .get("type")
                         .and_then(|t| t.as_str())
@@ -217,7 +224,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
 
                     output.push_str(&format!(
                         "    ($store:expr, \"{}\") => {{\n        $store.{}($crate::app::config_system::keys::{}).unwrap_or({})\n    }};\n",
-                        field_name, getter, const_name, default
+                        format!("{}.{}", section_name, field_name), getter, const_name, default
                     ));
                 }
             }
@@ -237,7 +244,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
     output.push_str("macro_rules! config_set {\n");
 
     if let Some(sections) = schema.get("sections").and_then(|s| s.as_table()) {
-        for (_, section_data) in sections {
+        for (section_name, section_data) in sections {
             if let Some(fields) = section_data.get("fields").and_then(|f| f.as_table()) {
                 for (field_name, field_data) in fields {
                     if let Some(public) = field_data.get("public").and_then(|p| p.as_bool())
@@ -246,7 +253,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
                         continue;
                     }
 
-                    let const_name = field_name.to_uppercase();
+                    let const_name = const_ident(section_name, field_name);
                     let field_type = field_data
                         .get("type")
                         .and_then(|t| t.as_str())
@@ -264,7 +271,7 @@ fn generate_macros_source(schema: &toml::Value) -> String {
 
                     output.push_str(&format!(
                         "    ($app:expr, \"{}\", $value:expr) => {{\n        $app.config_store.write().{}($crate::app::config_system::keys::{}, $value).ok()\n    }};\n",
-                        field_name, setter, const_name
+                        format!("{}.{}", section_name, field_name), setter, const_name
                     ));
                 }
             }
