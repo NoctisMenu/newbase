@@ -1,10 +1,12 @@
 pub mod codegen;
 mod error;
+pub mod keybind;
 pub mod keys;
 pub mod macros;
 mod schema;
 
 pub use error::{ConfigError, Result};
+pub use keybind::Key;
 pub use schema::{ConfigSchema, ConfigSection, FieldMetadata, FieldSchema, FieldType, WidgetType};
 
 //use crate::widgets::{Checkbox, SmoothSlider, ToggleSwitch};

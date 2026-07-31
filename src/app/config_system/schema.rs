@@ -15,6 +15,16 @@ fn default_version() -> u32 {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConfigSection {
     pub display_name: String,
+    /// Sidebar category this module (section) belongs to, e.g. "Combat".
+    /// Empty falls back to "Features".
+    #[serde(default)]
+    pub group: String,
+    /// Card subtitle shown under the module name in the grid.
+    #[serde(default)]
+    pub description: String,
+    /// Optional icon id (see the template's icon set) for the sidebar/card.
+    #[serde(default)]
+    pub icon: String,
     #[serde(default)]
     pub fields: HashMap<String, FieldSchema>,
 }

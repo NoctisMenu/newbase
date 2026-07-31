@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grim Client — GUI replica</title>
+<style>
+  :root{
+    --accent:      #8b5cf6;
+    --accent-br:   #a385ff;
+    --accent-soft: rgba(139,92,246,0.16);
+
+    --panel-top:   rgba(33,27,44,0.86);
+    --panel-bot:   rgba(20,16,27,0.86);
+    --card:        rgba(255,255,255,0.028);
+    --card-hover:  rgba(255,255,255,0.055);
+    --border:      rgba(255,255,255,0.065);
+    --border-str:  rgba(255,255,255,0.12);
+
+    --text:        #f2f1f6;
+    --text-dim:    #928d9d;
+    --text-faint:  #6c6678;
+
+    --pop:         #1b1626;
+    --radius:      26px;
+    --card-radius: 12px;
+
+    --spring:      cubic-bezier(.2,.9,.25,1);
+    --spring-back: cubic-bezier(.33,1.06,.5,1);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    font-family:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    color:var(--text);
+    display:flex;align-items:center;justify-content:center;
+    background:
+      linear-gradient(180deg, #5c3f92 0%, #5c3f92 58%, #6f9648 58%, #4f6f34 100%);
+    overflow:hidden;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.28) 100%);
+  }
+
+  /* ─────────────────────────  ENTRANCE  ─────────────────────────── */
+  @keyframes panelIn{
+    from{opacity:0;transform:translateY(16px) scale(.975)}
+    to  {opacity:1;transform:none}
+  }
+  /* Insert-toggle : bubbly expand open, shrink + fade close */
+  @keyframes menuOpen{
+    0%  {opacity:0;transform:scale(.8)}
+    55% {opacity:1;transform:scale(1.03)}
+    100%{opacity:1;transform:scale(1)}
+  }
+  @keyframes menuClose{
+    0%  {opacity:1;transform:scale(1)}
+    100%{opacity:0;transform:scale(.86)}
+  }
+  @keyframes cardIn{
+    from{opacity:0;transform:translateY(9px)}
+    to  {opacity:1;transform:none}
+  }
+  @keyframes rowIn{
+    from{opacity:0;transform:translateX(8px)}
+    to  {opacity:1;transform:none}
+  }
+  @keyframes itemIn{
+    from{opacity:0;transform:translateY(7px)}
+    to  {opacity:1;transform:none}
+  }
+  @keyframes searchIn{
+    from{opacity:0;transform:translate(-50%,-12px) scale(.95)}
+    to  {opacity:1;transform:translate(-50%,0) scale(1)}
+  }
+  @keyframes descIn{
+    from{opacity:0;transform:translateY(3px)}
+    to  {opacity:1;transform:none}
+  }
+
+  /* ─────────────────────────  MAIN PANEL  ───────────────────────── */
+  .stage{position:relative}
+  .panel{
+    position:relative;
+    width:min(960px,92vw);
+    background:linear-gradient(160deg,var(--panel-top),var(--panel-bot));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:
+      0 40px 120px -20px rgba(0,0,0,0.65),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    overflow:hidden;
+    -webkit-backdrop-filter:blur(14px);
+    backdrop-filter:blur(14px);
+    animation:panelIn .55s var(--spring) both;
+  }
+
+  .top{
+    display:grid;grid-template-columns:236px 1fr;align-items:center;
+    padding:18px 20px 16px;gap:6px;
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .logo{
+    width:44px;height:44px;border-radius:12px;flex-shrink:0;
+    background:radial-gradient(circle at 30% 25%,#3a3348,#171320);
+    border:1px solid var(--border-str);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);overflow:hidden;
+    transition:transform .3s var(--spring-back);
+  }
+  .brand .logo:hover{transform:rotate(-6deg) scale(1.06)}
+  .brand .logo svg{width:30px;height:30px;opacity:.92}
+  .brand .name{font-size:17px;font-weight:700;letter-spacing:-0.01em;line-height:1.15}
+  .brand .ver{font-size:11px;color:var(--text-faint);margin-top:2px}
+
+  .topbar{display:flex;align-items:center;gap:12px;padding-left:8px}
+  .topbar .cat-ico{width:19px;height:19px;color:var(--text);flex-shrink:0;display:inline-flex}
+  .topbar .cat-ico svg{width:19px;height:19px}
+  .topbar .cat-name{font-size:15px;font-weight:600}
+  .topbar .sep{color:var(--text-faint);font-size:13px}
+  .topbar .cat-desc{font-size:13px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar .cat-desc.anim{animation:descIn .26s ease both}
+  .topbar .search-btn{
+    margin-left:auto;width:34px;height:34px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:9px;color:var(--text-dim);cursor:pointer;
+    transition:background .15s, color .15s, transform .15s var(--spring-back);
+  }
+  .topbar .search-btn:hover{background:var(--card-hover);color:var(--text)}
+  .topbar .search-btn:active{transform:scale(.86)}
+  .topbar .search-btn svg{width:17px;height:17px}
+
+  .divider{height:1px;background:var(--border);margin:0 20px}
+
+  .body{display:grid;grid-template-columns:236px 1fr;
+    transition:filter .3s ease, opacity .3s ease}
+
+  /* ───────────  SIDEBAR  ─────────── */
+  .side{
+    position:relative;
+    padding:16px 16px 14px 20px;
+    display:flex;flex-direction:column;
+    border-right:1px solid var(--border);
+    min-height:520px;
+  }
+  .side .grp{font-size:10.5px;font-weight:600;letter-spacing:.09em;
+    color:var(--text-faint);text-transform:uppercase;margin:10px 8px 6px}
+  .side .grp:first-child{margin-top:0}
+
+  .nav-ind{
+    position:absolute;left:20px;top:0;width:0;height:0;border-radius:11px;
+    background:linear-gradient(180deg,var(--accent-br),var(--accent));
+    box-shadow:0 6px 18px -6px var(--accent), inset 0 1px 0 rgba(255,255,255,0.25);
+    z-index:0;opacity:0;pointer-events:none;
+    transition:top .34s var(--spring), left .34s var(--spring),
+               width .34s var(--spring), height .34s var(--spring), opacity .2s;
+  }
+  .nav{
+    position:relative;z-index:1;
+    display:flex;align-items:center;gap:12px;
+    padding:10px 12px;border-radius:11px;cursor:pointer;
+    color:var(--text-dim);font-size:14px;font-weight:500;
+    transition:color .16s, background .16s, transform .12s;
+  }
+  .nav svg{width:18px;height:18px;flex-shrink:0;transition:transform .2s var(--spring-back)}
+  .nav:hover{color:var(--text)}
+  .nav:hover:not(.active){background:rgba(255,255,255,0.04)}
+  .nav:hover svg{transform:scale(1.12)}
+  .nav:active{transform:scale(.97)}
+  .nav.active{color:#fff;font-weight:600}
+  .nav.active svg{color:#fff}
+
+  .side .spacer{flex:1}
+  .user{
+    display:flex;align-items:center;gap:12px;padding:8px;margin-top:8px;
+    border-top:1px solid var(--border);padding-top:16px;
+  }
+  .user .av{width:30px;height:30px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;color:var(--text-dim)}
+  .user .av svg{width:20px;height:20px}
+  .user .u-name{font-size:13px;font-weight:600}
+  .user .u-uid{font-size:11px;color:var(--text-faint);margin-top:1px}
+
+  /* ───────────  CARD GRID  ─────────── */
+  .grid{
+    padding:16px 20px 20px;
+    display:grid;grid-template-columns:1fr 1fr;gap:11px;
+    align-content:start;max-height:520px;overflow-y:auto;
+  }
+  .grid::-webkit-scrollbar{width:7px}
+  .grid::-webkit-scrollbar-thumb{background:var(--border-str);border-radius:4px}
+  .grid::-webkit-scrollbar-track{background:transparent}
+
+  .mod{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--card-radius);
+    padding:13px 15px;cursor:pointer;
+    position:relative;overflow:hidden;
+    transition:background .15s, border-color .15s, transform .14s var(--spring-back), box-shadow .15s;
+    animation:cardIn .34s var(--spring) both;
+  }
+  .mod:hover{background:var(--card-hover);border-color:var(--border-str);
+    transform:translateY(-2px);box-shadow:0 10px 24px -14px rgba(0,0,0,.8)}
+  .mod:active{transform:translateY(0) scale(.985)}
+  .mod .t{font-size:14.5px;font-weight:600;letter-spacing:-0.005em}
+  .mod .d{font-size:12px;color:var(--text-dim);margin-top:3px;line-height:1.35;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mod::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:linear-gradient(180deg,var(--accent-br),var(--accent));
+    transform:scaleY(0);transform-origin:center;
+    transition:transform .28s var(--spring-back);
+  }
+  .mod.on{border-color:var(--accent)}
+  .mod.on::before{transform:scaleY(1)}
+  /* clicked / selected module — lerps into a raised, highlighted state */
+  .mod.selected{
+    border-color:var(--accent);
+    background:var(--accent-soft);
+    transform:translateY(-3px) scale(1.04);
+    box-shadow:0 20px 46px -18px var(--accent), 0 0 0 1px var(--accent-soft);
+    z-index:4;
+  }
+  .mod.selected:hover{transform:translateY(-4px) scale(1.05)}
+  .mod.selected::before{transform:scaleY(1)}
+  .mod.selected .t{color:#fff}
+  /* click ripple */
+  .mod .ripple{
+    position:absolute;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,var(--accent-soft) 0%,transparent 70%);
+    transform:translate(-50%,-50%) scale(0);
+    animation:ripple .5s ease-out forwards;
+  }
+  @keyframes ripple{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
+
+  /* ───────────  MODULE SETTINGS POPUP  ─────────── */
+  .pop{
+    position:absolute;top:74px;left:100%;margin-left:18px;width:244px;
+    background:var(--pop);
+    border:1px solid var(--border-str);
+    border-radius:16px;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,0.75);
+    padding:16px 18px;
+    transform-origin:top left;
+    opacity:0;transform:translateX(-14px) scale(.94);
+    transition:opacity .24s ease, transform .34s var(--spring-back);
+    pointer-events:none;z-index:25;
+  }
+  .pop.show{opacity:1;transform:translateX(0) scale(1);pointer-events:auto}
+  .pop .p-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .pop.show .p-head{animation:rowIn .3s var(--spring) .04s both}
+  .pop .p-title{font-size:15px;font-weight:600}
+  .pop .p-x{width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+    border-radius:6px;color:var(--text-dim);cursor:pointer;
+    transition:background .14s,color .14s,transform .2s var(--spring-back)}
+  .pop .p-x:hover{background:var(--card-hover);color:var(--text);transform:rotate(90deg)}
+  .pop .p-x svg{width:14px;height:14px}
+  .p-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0}
+  .pop.show .p-row{animation:rowIn .32s var(--spring) both}
+  .pop.show .p-row:nth-of-type(1){animation-delay:.09s}
+  .pop.show .p-row:nth-of-type(2){animation-delay:.15s}
+  .pop.show .p-row:nth-of-type(3){animation-delay:.21s}
+  .p-row .p-lbl{font-size:13.5px;color:var(--text)}
+  .p-row .p-ext{color:var(--text-dim);cursor:pointer;transition:color .15s,transform .2s var(--spring-back)}
+  .p-row .p-ext:hover{color:var(--text);transform:translate(1px,-1px)}
+  .p-row .p-ext svg{width:16px;height:16px;display:block}
+  .m-select{background:var(--card-hover);border:1px solid var(--border);color:var(--text);
+    font:inherit;font-size:12.5px;border-radius:7px;padding:4px 8px;outline:none;cursor:pointer;max-width:128px}
+  .m-select:focus{border-color:var(--accent)}
+  .m-val{font-size:12.5px;color:var(--text-dim)}
+  .dot{width:15px;height:15px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-soft);cursor:pointer;
+    transition:transform .2s var(--spring-back),box-shadow .2s}
+  .dot:hover{transform:scale(1.15);box-shadow:0 0 0 5px var(--accent-soft)}
+
+  /* toggle */
+  .tog{width:38px;height:21px;border-radius:11px;background:rgba(255,255,255,0.14);
+    position:relative;cursor:pointer;transition:background .25s;flex-shrink:0}
+  .tog::after{content:'';position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;
+    border-radius:50%;background:#fff;
+    transition:transform .3s var(--spring-back), width .15s ease;
+    box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .tog:active::after{width:20px}
+  .tog.on{background:linear-gradient(180deg,var(--accent-br),var(--accent))}
+  .tog.on::after{transform:translateX(17px)}
+
+  /* ───────────  CARD ⇄ SETTINGS MORPH  ─────────── */
+  /* one element that flies from the clicked card's slot and expands into the
+     settings panel — a true shared-element transition */
+  .morph{
+    position:fixed;z-index:60;overflow:hidden;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--card-radius);
+    padding:13px 15px;
+    opacity:0;visibility:hidden;pointer-events:none;
+    box-shadow:0 0 0 rgba(0,0,0,0);
+    transition:
+      top   .46s var(--spring-back), left  .46s var(--spring-back),
+      width .46s var(--spring-back), height .46s var(--spring-back),
+      padding .46s var(--spring-back),
+      background .4s ease, border-color .4s ease, border-radius .4s ease, box-shadow .4s ease;
+  }
+  .morph.active{opacity:1;visibility:visible}
+  .morph.settings{
+    background:var(--pop);
+    border-color:var(--border-str);
+    border-radius:16px;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,0.75);
+    padding:16px 18px;
+    pointer-events:auto;
+  }
+  .m-title{font-size:14.5px;font-weight:600;letter-spacing:-0.005em;
+    transition:font-size .35s var(--spring-back), color .3s, margin .4s ease}
+  .morph.settings .m-title{font-size:15px;color:#fff;margin-bottom:14px}
+  .m-desc{font-size:12px;color:var(--text-dim);margin-top:3px;max-height:20px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:opacity .16s ease, max-height .4s ease, margin .4s ease}
+  .morph.settings .m-desc{opacity:0;max-height:0;margin-top:0}
+  .m-x{position:absolute;top:15px;right:16px;width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;border-radius:6px;
+    color:var(--text-dim);cursor:pointer;opacity:0;
+    transition:opacity .25s ease .12s, background .14s, color .14s, transform .2s var(--spring-back)}
+  .m-x:hover{background:var(--card-hover);color:var(--text);transform:rotate(90deg)}
+  .m-x svg{width:14px;height:14px}
+  .morph.settings .m-x{opacity:1}
+  .m-body{opacity:0;max-height:0;overflow:hidden;transition:opacity .3s ease .06s}
+  .morph.settings .m-body{opacity:1;max-height:320px}
+  .morph.settings .m-body .p-row{animation:rowIn .34s var(--spring) both}
+  .morph.settings .m-body .p-row:nth-of-type(1){animation-delay:.16s}
+  .morph.settings .m-body .p-row:nth-of-type(2){animation-delay:.22s}
+  .morph.settings .m-body .p-row:nth-of-type(3){animation-delay:.28s}
+
+  /* ───────────  SEARCH OVERLAY  ─────────── */
+  .search-wrap{position:absolute;inset:0;z-index:30;
+    opacity:0;visibility:hidden;transition:opacity .25s ease, visibility .25s}
+  .search-wrap::before{
+    content:'';position:absolute;inset:0;
+    background:rgba(8,6,12,0.5);
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  }
+  .search-wrap.show{opacity:1;visibility:visible}
+  .search-box{
+    position:absolute;top:64px;left:50%;transform:translateX(-50%);
+    width:420px;background:var(--pop);
+    border:1px solid var(--border-str);border-radius:16px;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,0.7);
+    padding:6px;overflow:hidden;
+  }
+  .search-wrap.show .search-box{animation:searchIn .3s var(--spring) both}
+  .search-box input{
+    width:100%;background:transparent;border:none;outline:none;
+    color:var(--text);font:inherit;font-size:15px;padding:12px 14px;
+  }
+  .search-box input::placeholder{color:var(--text-faint)}
+  .s-results{border-top:1px solid transparent;padding:0 6px;
+    max-height:0;overflow:hidden;
+    transition:max-height .3s var(--spring), padding .3s ease, border-color .3s}
+  .s-results.show{max-height:340px;padding:8px 6px 6px;border-top-color:var(--border)}
+  .s-results .lbl{font-size:11px;color:var(--text-faint);padding:4px 8px 6px}
+  .s-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:9px;
+    font-size:13.5px;cursor:pointer;transition:background .12s, transform .12s;
+    animation:itemIn .26s ease both}
+  .s-item:hover{background:var(--card-hover);transform:translateX(2px)}
+  .s-item .cat{color:var(--text-dim)}
+  .s-item .dotsep{color:var(--text-faint)}
+  .s-empty{padding:14px;color:var(--text-faint);font-size:13px;text-align:center;
+    animation:itemIn .26s ease both}
+
+  .hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+    font-size:12px;color:rgba(255,255,255,.55);letter-spacing:.02em}
+  .hint b{color:#fff;font-weight:600}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+<div class="panel" id="panel">
+  <div class="top">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#b9aee0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 5c0-1 1-2 2-1l2 2h8l2-2c1-1 2 0 2 1v6a8 8 0 0 1-16 0Z"/>
+          <circle cx="9" cy="10" r="1.1" fill="#b9aee0" stroke="none"/>
+          <circle cx="15" cy="10" r="1.1" fill="#b9aee0" stroke="none"/>
+          <path d="M10 15h4"/>
+        </svg>
+      </div>
+      <div>
+        <div class="name" id="brandName">Grim Client</div>
+        <div class="ver" id="brandVer">Version: 4.2</div>
+      </div>
+    </div>
+
+    <div class="topbar">
+      <span class="cat-ico" id="catIco"></span>
+      <span class="cat-name" id="catName">Combat</span>
+      <span class="sep">•</span>
+      <span class="cat-desc" id="catDesc">Automatically hits entity when in range</span>
+      <div class="search-btn" id="searchBtn" title="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="body" id="bodyEl">
+    <div class="side" id="side">
+      <div class="nav-ind" id="navInd"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- search overlay -->
+  <div class="search-wrap" id="searchWrap">
+    <div class="search-box">
+      <input id="searchInput" placeholder="Search" autocomplete="off" spellcheck="false">
+      <div class="s-results" id="sResults"></div>
+    </div>
+  </div>
+</div><!-- panel -->
+</div><!-- stage -->
+
+<!-- clicked card ⇄ settings panel : one shared element that morphs between the
+     two, fixed-positioned on <body> so nothing clips or offsets it -->
+<div id="morph" class="morph">
+  <div class="m-x" id="mClose">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </div>
+  <div class="m-title" id="mTitle"></div>
+  <div class="m-desc" id="mDesc"></div>
+  <div class="m-body" id="mBody"></div>
+</div>
+
+<div class="hint">Press <b>Insert</b> to toggle · click a <b>module</b> to open its settings · click the <b>search</b> icon</div>
+
+<script>window.__GRIM_DATA = {{DATA}};</script>
+<script>
+/* ── icon set (lucide-ish) ───────────────────────────────────── */
+const I = {
+  combat:'<polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" x2="19" y1="19" y2="13"/><line x1="16" x2="20" y1="16" y2="20"/><line x1="19" x2="21" y1="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" x2="9" y1="14" y2="18"/><line x1="7" x2="4" y1="17" y2="20"/><line x1="3" x2="5" y1="19" y2="21"/>',
+  movement:'<circle cx="13" cy="4" r="2"/><path d="M4 17l3-1 2-4 3 2v6"/><path d="M12 14l3 1 2 3"/><path d="M9 8l3 2 3-1 2 2"/>',
+  player:'<circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/>',
+  visuals:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  client:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
+  friends:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  configs:'<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>',
+  hud:'<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>'
+};
+const svg = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+/* ── native bridge ───────────────────────────────────────────── */
+const ipc = p => { try { window.ipc.postMessage(JSON.stringify(p)); return true; } catch (e) { return false; } };
+window.addEventListener('error', ev => ipc({type:'js_error', message: ev.message||'error', filename: ev.filename||'', line: ev.lineno||0, column: ev.colno||0}));
+window.addEventListener('unhandledrejection', ev => ipc({type:'js_error', message:'Unhandled rejection: '+String(ev.reason)}));
+window.__newbaseSetFps   = fps => { const el=document.getElementById('fps-hud'); if(el) el.textContent=(Math.max(0,+fps||0)).toFixed(0)+' fps'; };
+window.__newbasePushLogs = () => {};
+const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+I.default = '<rect x="4" y="4" width="16" height="16" rx="5"/>';
+
+/* ── data (config schema, injected by Rust) ──────────────────── */
+const DATA = (window.__GRIM_DATA && window.__GRIM_DATA.categories) ? window.__GRIM_DATA : {categories:[]};
+const CATS = DATA.categories.map(c => ({id:c.id, name:c.name, icon:c.icon||c.id}));
+const MODS = {};
+DATA.categories.forEach(c => { MODS[c.id] = c.modules || []; });
+function iconFor(catId){ const c=CATS.find(x=>x.id===catId); const k=(c&&c.icon)||catId; return I[k]||I[catId]||I.default; }
+
+if(window.__GRIM_DATA){
+  const bn=document.getElementById('brandName'); if(bn && window.__GRIM_DATA.brand) bn.textContent=window.__GRIM_DATA.brand;
+  const bv=document.getElementById('brandVer'); if(bv && window.__GRIM_DATA.version) bv.textContent='Version: '+window.__GRIM_DATA.version;
+}
+
+/* ── state ───────────────────────────────────────────────────── */
+let active = (CATS[0] && CATS[0].id) || '';
+
+const side   = document.getElementById('side');
+const ind    = document.getElementById('navInd');
+const grid   = document.getElementById('grid');
+const catDescEl = document.getElementById('catDesc');
+
+/* ── sidebar (built once; indicator slides) ──────────────────── */
+function renderSide(){
+  let html = '<div class="grp">Features</div>';
+  CATS.forEach(c=>{
+    html+=`<div class="nav ${c.id===active?'active':''}" data-cat="${esc(c.id)}">${svg(iconFor(c.id))}<span>${esc(c.name)}</span></div>`;
+  });
+  html+=`<div class="spacer"></div>
+    <div class="user">
+      <div class="av">${svg('<circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/>')}</div>
+      <div><div class="u-name">vvv</div><div class="u-uid">UID: 1</div></div>
+    </div>`;
+  side.insertAdjacentHTML('beforeend', html);
+  side.querySelectorAll('.nav').forEach(n=>{
+    n.onclick = ()=> setActive(n.dataset.cat);
+  });
+}
+function moveIndicator(){
+  const el = side.querySelector('.nav.active');
+  if(!el) return;
+  ind.style.opacity = 1;
+  ind.style.top    = el.offsetTop + 'px';
+  ind.style.left   = el.offsetLeft + 'px';
+  ind.style.width  = el.offsetWidth + 'px';
+  ind.style.height = el.offsetHeight + 'px';
+}
+
+/* ── header ──────────────────────────────────────────────────── */
+function setHeader(desc){
+  if(!CATS.length) return;
+  const c = CATS.find(x=>x.id===active) || CATS[0];
+  document.getElementById('catIco').innerHTML = svg(iconFor(active));
+  document.getElementById('catName').textContent = c.name;
+  const list = MODS[active] || [];
+  const next = desc || (list[0] ? list[0].desc : '') || '';
+  if(next !== catDescEl.textContent){
+    catDescEl.textContent = next;
+    catDescEl.classList.remove('anim'); void catDescEl.offsetWidth; catDescEl.classList.add('anim');
+  }
+}
+
+/* ── grid (staggered entrance on category change) ────────────── */
+function renderGrid(){
+  const list = MODS[active] || [];
+  grid.innerHTML = list.map((m,i)=>
+    `<div class="mod ${m.enabled?'on':''}" data-i="${i}" data-key="${esc(m.key)}" style="animation-delay:${Math.min(i*22,260)}ms">
+       <div class="t">${esc(m.name)}</div><div class="d">${esc(m.desc||'')}</div>
+     </div>`).join('');
+  grid.querySelectorAll('.mod').forEach(el=>{
+    const m = list[+el.dataset.i];
+    el.onmouseenter = ()=> setHeader(m.desc);
+    el.onclick = e=>{ spawnRipple(el,e); openModule(el,m); };
+  });
+}
+grid.addEventListener('mouseleave', ()=> setHeader());
+
+function spawnRipple(el,e){
+  const r = el.getBoundingClientRect();
+  const rip = document.createElement('span');
+  rip.className='ripple';
+  const size = Math.max(r.width,r.height)*1.6;
+  rip.style.width = rip.style.height = size+'px';
+  rip.style.left = (e.clientX - r.left)+'px';
+  rip.style.top  = (e.clientY - r.top)+'px';
+  el.appendChild(rip);
+  setTimeout(()=>rip.remove(),520);
+}
+
+function setActive(catId){
+  if(catId===active){ return; }
+  resetMorph();
+  active = catId;
+  side.querySelectorAll('.nav').forEach(n=> n.classList.toggle('active', n.dataset.cat===catId));
+  moveIndicator();
+  renderGrid();
+  setHeader();
+}
+
+/* ── module card ⇄ settings morph ─────────────────────────────── */
+const panel  = document.getElementById('panel');
+const morph  = document.getElementById('morph');
+const mTitle = document.getElementById('mTitle');
+const mDesc  = document.getElementById('mDesc');
+const mBody  = document.getElementById('mBody');
+
+let openMod = null, sourceCard = null, closeTimer = null;
+const GAP = 18, PANEL_W = 244, TOP_OFF = 74;
+
+function setGeom(l,t,w,h){
+  morph.style.left = l+'px'; morph.style.top = t+'px';
+  morph.style.width = w+'px'; morph.style.height = h+'px';
+}
+
+/* build the settings rows for a module from its schema fields */
+function buildBody(mod){
+  let rows = '';
+  if(mod.enabledKey != null){
+    rows += `<div class="p-row"><span class="p-lbl">Enabled</span><div class="tog${mod.enabled?' on':''}" data-key="${esc(mod.enabledKey)}" data-role="enabled"></div></div>`;
+  }
+  (mod.settings||[]).forEach(s=>{
+    if(s.kind==='color'){
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="dot" style="background:${esc(s.value||'#8b5cf6')}"></div></div>`;
+    } else if(s.kind==='keybind' || s.kind==='enum'){
+      const opts=(s.variants||[]).map(v=>`<option value="${esc(v)}"${v===s.value?' selected':''}>${esc(v)}</option>`).join('');
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><select class="m-select" data-key="${esc(s.key)}">${opts}</select></div>`;
+    } else if(s.kind==='toggle'){
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="tog${s.value?' on':''}" data-key="${esc(s.key)}" data-role="bool"></div></div>`;
+    } else {
+      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><span class="m-val">${esc(String(s.value))}</span></div>`;
+    }
+  });
+  return rows || `<div class="p-row"><span class="p-lbl" style="color:var(--text-faint)">No settings</span></div>`;
+}
+function markCard(key,on){
+  const card=[...grid.querySelectorAll('.mod')].find(el=>el.dataset.key===key);
+  if(card) card.classList.toggle('on', on);
+}
+function wireBody(){
+  mBody.querySelectorAll('.tog[data-key]').forEach(t=>{
+    t.onclick = ()=>{
+      const on = !t.classList.contains('on');
+      t.classList.toggle('on', on);
+      ipc({type:'config', key:t.dataset.key, value:on});
+      if(t.dataset.role==='enabled' && openMod){ openMod.enabled=on; markCard(openMod.key,on); }
+    };
+  });
+  mBody.querySelectorAll('.m-select').forEach(sel=>{
+    sel.onchange = ()=> ipc({type:'config', key:sel.dataset.key, value:sel.value});
+  });
+}
+
+function openModule(cardEl, mod){
+  clearTimeout(closeTimer);
+  if(sourceCard && sourceCard !== cardEl) sourceCard.style.visibility = '';  // free a previous slot
+  sourceCard = cardEl;
+  openMod = mod;
+
+  mTitle.textContent = mod.name;
+  mDesc.textContent  = mod.desc || '';
+  mBody.innerHTML = buildBody(mod);
+  wireBody();
+
+  const first = cardEl.getBoundingClientRect();
+  cardEl.style.visibility = 'hidden';        // leave a blank slot where the card was
+
+  // measure the settings height for this module's rows (offscreen, no transition)
+  morph.style.transition = 'none';
+  morph.classList.add('active','settings');
+  morph.style.left='-9999px'; morph.style.top='0'; morph.style.width=PANEL_W+'px'; morph.style.height='auto';
+  const targetH = morph.offsetHeight;
+
+  // snap onto the card, looking exactly like the card
+  morph.classList.remove('settings');
+  setGeom(first.left, first.top, first.width, first.height);
+  void morph.offsetWidth;                     // commit the start frame
+
+  // release transition and fly to the settings position, expanding + morphing
+  morph.style.transition = '';
+  const p = panel.getBoundingClientRect();
+  morph.classList.add('settings');
+  setGeom(p.right + GAP, p.top + TOP_OFF, PANEL_W, targetH);
+}
+
+function closeModule(){
+  if(!openMod) return;
+  const cardEl = sourceCard;
+  openMod = null;
+  const first = cardEl.getBoundingClientRect();   // still occupies its slot while hidden
+  morph.classList.remove('settings');             // shrink + morph back into the card
+  setGeom(first.left, first.top, first.width, first.height);
+  clearTimeout(closeTimer);
+  closeTimer = setTimeout(()=>{
+    morph.classList.remove('active');
+    if(cardEl) cardEl.style.visibility = '';      // card reappears in its slot
+    sourceCard = null;
+  }, 460);
+}
+
+function resetMorph(){                            // instant teardown (category switch)
+  clearTimeout(closeTimer);
+  morph.style.animation = '';
+  morph.classList.remove('active','settings');
+  if(sourceCard) sourceCard.style.visibility = '';
+  sourceCard = null; openMod = null;
+}
+
+function shrinkMorph(){                           // shrink + fade the open settings panel
+  if(!morph.classList.contains('active')){ resetMorph(); return; }
+  clearTimeout(closeTimer);
+  openMod = null;
+  morph.style.animation = 'menuClose .28s ease both';
+  morph.addEventListener('animationend', function h(){
+    morph.removeEventListener('animationend', h);
+    resetMorph();
+  });
+}
+
+document.getElementById('mClose').onclick = closeModule;
+
+/* click anywhere outside the settings panel / a card dismisses it */
+document.addEventListener('mousedown', e=>{
+  if(!openMod) return;                         // opening click fires before openMod is set
+  if(e.target.closest('#morph')) return;       // interacting with the settings panel
+  if(e.target.closest('.mod'))   return;       // switching to another card (its onclick handles it)
+  closeModule();
+});
+
+/* ── search ──────────────────────────────────────────────────── */
+const sWrap  = document.getElementById('searchWrap');
+const sInput = document.getElementById('searchInput');
+const sRes   = document.getElementById('sResults');
+document.getElementById('searchBtn').onclick = ()=>{
+  sWrap.classList.add('show'); sInput.value=''; sRes.classList.remove('show'); sRes.innerHTML='';
+  setTimeout(()=>sInput.focus(),60);
+};
+sWrap.onclick = e=>{ if(e.target===sWrap) sWrap.classList.remove('show'); };
+sInput.oninput = ()=>{
+  const q = sInput.value.trim().toLowerCase();
+  if(!q){ sRes.classList.remove('show'); return; }
+  const hits=[];
+  for(const c of CATS)
+    for(const m of (MODS[c.id]||[]))
+      if(m.name.toLowerCase().includes(q)) hits.push({catId:c.id, key:m.key, name:m.name});
+  sRes.classList.add('show');
+  sRes.innerHTML = '<div class="lbl">Results</div>' + (hits.length
+    ? hits.slice(0,6).map((h,i)=>`<div class="s-item" data-cat="${esc(h.catId)}" data-key="${esc(h.key)}" style="animation-delay:${i*35}ms"><span class="cat">Modules</span><span class="dotsep">•</span><span>${esc(h.name)}</span></div>`).join('')
+    : '<div class="s-empty">No modules found</div>');
+  sRes.querySelectorAll('.s-item').forEach(it=>{
+    it.onclick = ()=>{
+      setActive(it.dataset.cat);
+      const m = (MODS[active]||[]).find(x=>x.key===it.dataset.key);
+      sWrap.classList.remove('show');
+      if(m) setTimeout(()=>{
+        const cardEl = [...grid.querySelectorAll('.mod')].find(el=> el.dataset.key === m.key);
+        if(cardEl) openModule(cardEl, m);
+      }, 220);
+    };
+  });
+};
+
+/* ── Insert / native toggle : bubbly open, shrink + fade close ── */
+const stage = document.querySelector('.stage');
+let menuVisible = true;
+function applyMenu(v){
+  if(v === menuVisible) return;
+  menuVisible = v;
+  stage.style.animation = 'none'; void stage.offsetWidth;   // restart cleanly
+  if(v){
+    stage.style.display = '';
+    stage.style.animation = 'menuOpen .42s var(--spring) both';
+  }else{
+    sWrap.classList.remove('show');
+    shrinkMorph();
+    stage.style.animation = 'menuClose .28s ease both';
+  }
+}
+function toggleMenu(){ applyMenu(!menuVisible); ipc({type:'visibility', visible:menuVisible}); }
+window.__newbaseSetVisible = v => { applyMenu(!!v); return true; };
+stage.addEventListener('animationend', e=>{
+  if(e.target === stage && !menuVisible) stage.style.display = 'none';   // hide after shrink
+});
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ sWrap.classList.remove('show'); closeModule(); }
+  if(e.key==='Insert'){ e.preventDefault(); toggleMenu(); }
+});
+
+/* ── init ────────────────────────────────────────────────────── */
+renderSide();
+renderGrid();
+setHeader();
+requestAnimationFrame(()=> requestAnimationFrame(moveIndicator));
+ipc({type:'ready'});
+</script>
+</body>
+</html>
