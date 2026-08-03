@@ -13,6 +13,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, MOUSEINPUT, SendInput,
 };
 
+use crate::config_system::Key;
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum InputBackend {
     #[default]
@@ -116,6 +118,41 @@ impl InputDeviceState {
             MouseButton::Button5 => 5,
         };
         self.mouse().button_pressed.get(index).copied().unwrap_or(false)
+    }
+
+    pub fn binding_down(&self, key: Key) -> bool {
+        use Key::*;
+        let keyboard = match key {
+            None => return false,
+            MouseLeft => return self.mouse_button_down(MouseButton::Left),
+            MouseRight => return self.mouse_button_down(MouseButton::Right),
+            MouseMiddle => return self.mouse_button_down(MouseButton::Middle),
+            Mouse4 => return self.mouse_button_down(MouseButton::Button4),
+            Mouse5 => return self.mouse_button_down(MouseButton::Button5),
+            A => Keycode::A, B => Keycode::B, C => Keycode::C, D => Keycode::D,
+            E => Keycode::E, F => Keycode::F, G => Keycode::G, H => Keycode::H,
+            I => Keycode::I, J => Keycode::J, K => Keycode::K, L => Keycode::L,
+            M => Keycode::M, N => Keycode::N, O => Keycode::O, P => Keycode::P,
+            Q => Keycode::Q, R => Keycode::R, S => Keycode::S, T => Keycode::T,
+            U => Keycode::U, V => Keycode::V, W => Keycode::W, X => Keycode::X,
+            Y => Keycode::Y, Z => Keycode::Z,
+            Num0 => Keycode::Key0, Num1 => Keycode::Key1, Num2 => Keycode::Key2,
+            Num3 => Keycode::Key3, Num4 => Keycode::Key4, Num5 => Keycode::Key5,
+            Num6 => Keycode::Key6, Num7 => Keycode::Key7, Num8 => Keycode::Key8,
+            Num9 => Keycode::Key9,
+            F1 => Keycode::F1, F2 => Keycode::F2, F3 => Keycode::F3, F4 => Keycode::F4,
+            F5 => Keycode::F5, F6 => Keycode::F6, F7 => Keycode::F7, F8 => Keycode::F8,
+            F9 => Keycode::F9, F10 => Keycode::F10, F11 => Keycode::F11, F12 => Keycode::F12,
+            Up => Keycode::Up, Down => Keycode::Down, Left => Keycode::Left,
+            Right => Keycode::Right, Space => Keycode::Space, Enter => Keycode::Enter,
+            Tab => Keycode::Tab, Escape => Keycode::Escape, Backspace => Keycode::Backspace,
+            Insert => Keycode::Insert, Delete => Keycode::Delete, Home => Keycode::Home,
+            End => Keycode::End, PageUp => Keycode::PageUp, PageDown => Keycode::PageDown,
+            LeftShift => Keycode::LShift, RightShift => Keycode::RShift,
+            LeftControl => Keycode::LControl, RightControl => Keycode::RControl,
+            LeftAlt => Keycode::LAlt, RightAlt => Keycode::RAlt,
+        };
+        self.key_down(keyboard)
     }
 
     pub fn move_mouse(&self, backend: InputBackend, dx: i32, dy: i32) -> Result<(), InputError> {
