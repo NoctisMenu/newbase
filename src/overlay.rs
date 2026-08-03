@@ -4,8 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use device_query::DeviceQuery;
-
 /// Backing storage for [`VERSION_BANNER`]. `"version:"` (8) + up to a 40-char
 /// git hash fits comfortably; oversized hashes are truncated in [`build_banner`].
 const BANNER_CAP: usize = 64;
@@ -627,8 +625,8 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                 continue;
             }
 
-            let current_keys: HashSet<_> = self.device_state.get_keys().into_iter().collect();
-            let current_mouse_buttons = self.device_state.get_mouse().button_pressed;
+            let current_keys: HashSet<_> = self.device_state.keys().into_iter().collect();
+            let current_mouse_buttons = self.device_state.mouse().button_pressed;
             if keybind_capture.is_some() && !keybind_capture_armed {
                 keybind_capture_armed = true;
             } else if let Some(config_key) = keybind_capture.as_ref() {
