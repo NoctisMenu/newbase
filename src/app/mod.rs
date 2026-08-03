@@ -86,7 +86,10 @@ pub struct App<S> {
     pub game_window: windowing::Window,
     pub window_info: windowing::WindowInfo,
     pub time_remaining: Arc<AtomicI64>,
-    pub device_state: Arc<crate::input::InputDeviceState>,
+    /// Raw device-query state retained for overlay and backwards compatibility.
+    pub device_state: device_query::DeviceState,
+    /// Shared high-level input/output API for feature systems.
+    pub input: Arc<crate::input::InputDeviceState>,
 
     // Thread management
     shutdown: Arc<AtomicBool>,
@@ -146,7 +149,8 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
             },
             init: false,
             exit: false,
-            device_state: Arc::new(crate::input::InputDeviceState::new()),
+            device_state: device_query::DeviceState::new(),
+            input: Arc::new(crate::input::InputDeviceState::new()),
             frametime: Duration::from_secs(1),
             frame_samples: Vec::new(),
             last_fps_update: Instant::now(),
@@ -199,9 +203,7 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
         M: Fn(i32, i32) -> Result<(), String> + Send + Sync + 'static,
         C: Fn(crate::MouseButton, Duration) -> Result<(), String> + Send + Sync + 'static,
     {
-        self.app
-            .device_state
-            .set_raskal_backend(move_relative, click);
+        self.app.input.set_raskal_backend(move_relative, click);
         self
     }
 
@@ -324,7 +326,7 @@ impl<S: Send + Sync + 'static> App<S> {
         let ctx = ThreadCtx {
             shutdown: self.shutdown.clone(),
             state: self.state.clone(),
-            device_state: self.device_state.clone(),
+            device_state: self.input.clone(),
         };
 
         let handle = std::thread::Builder::new()
@@ -357,7 +359,7 @@ impl<S: Send + Sync + 'static> App<S> {
         ThreadCtx {
             shutdown: self.shutdown.clone(),
             state: self.state.clone(),
-            device_state: self.device_state.clone(),
+            device_state: self.input.clone(),
         }
     }
 
