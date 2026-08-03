@@ -30,7 +30,6 @@ pub enum ThreadFlow {
 pub struct ThreadCtx<S> {
     shutdown: Arc<AtomicBool>,
     state: Arc<S>,
-    pub device_state: Arc<crate::input::InputDeviceState>,
 }
 
 impl<S> ThreadCtx<S> {
@@ -40,10 +39,6 @@ impl<S> ThreadCtx<S> {
 
     pub fn state(&self) -> &Arc<S> {
         &self.state
-    }
-
-    pub fn device_state(&self) -> &Arc<crate::input::InputDeviceState> {
-        &self.device_state
     }
 }
 
@@ -86,7 +81,7 @@ pub struct App<S> {
     pub game_window: windowing::Window,
     pub window_info: windowing::WindowInfo,
     pub time_remaining: Arc<AtomicI64>,
-    pub device_state: Arc<crate::input::InputDeviceState>,
+    pub device_state: device_query::DeviceState,
 
     // Thread management
     shutdown: Arc<AtomicBool>,
@@ -146,7 +141,7 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
             },
             init: false,
             exit: false,
-            device_state: Arc::new(crate::input::InputDeviceState::new()),
+            device_state: device_query::DeviceState::new(),
             frametime: Duration::from_secs(1),
             frame_samples: Vec::new(),
             last_fps_update: Instant::now(),
@@ -189,19 +184,6 @@ impl<S: Send + Sync + 'static> AppBuilder<S> {
         L: LogicSystem<S> + 'static,
     {
         self.app.add_logic(system);
-        self
-    }
-
-    /// Register the hardware-backed mouse operations used by
-    /// [`crate::InputBackend::Raskal`].
-    pub fn with_raskal_input<M, C>(self, move_relative: M, click: C) -> Self
-    where
-        M: Fn(i32, i32) -> Result<(), String> + Send + Sync + 'static,
-        C: Fn(crate::MouseButton, Duration) -> Result<(), String> + Send + Sync + 'static,
-    {
-        self.app
-            .device_state
-            .set_raskal_backend(move_relative, click);
         self
     }
 
@@ -324,7 +306,6 @@ impl<S: Send + Sync + 'static> App<S> {
         let ctx = ThreadCtx {
             shutdown: self.shutdown.clone(),
             state: self.state.clone(),
-            device_state: self.device_state.clone(),
         };
 
         let handle = std::thread::Builder::new()
@@ -357,7 +338,6 @@ impl<S: Send + Sync + 'static> App<S> {
         ThreadCtx {
             shutdown: self.shutdown.clone(),
             state: self.state.clone(),
-            device_state: self.device_state.clone(),
         }
     }
 
