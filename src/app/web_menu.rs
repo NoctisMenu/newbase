@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 const TEMPLATE: &str = include_str!("../../resources/grim_menu.html");
 const PROFILE_AVATAR: &[u8] = include_bytes!("../../resources/fr0st-avatar.png");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MenuCommand {
     None,
     Ready,
@@ -14,6 +14,7 @@ pub(crate) enum MenuCommand {
     SetVisible(bool),
     SetLogLevel(log::LevelFilter),
     SetSearchFocused(bool),
+    CaptureKeybind(String),
     SetFpsDisplay(bool),
     SetFpsHistogram(bool),
 }
@@ -253,6 +254,13 @@ pub(crate) fn apply_message(store: &mut ConfigStore, message: &str) -> Result<Me
         )),
         Some("search_focus") => Ok(MenuCommand::SetSearchFocused(true)),
         Some("search_blur") => Ok(MenuCommand::SetSearchFocused(false)),
+        Some("keybind_capture") => Ok(MenuCommand::CaptureKeybind(
+            payload
+                .get("key")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("keybind capture message has no key")?
+                .to_owned(),
+        )),
         Some("config") => {
             let key = payload
                 .get("key")
