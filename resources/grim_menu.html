@@ -669,9 +669,7 @@ function buildBody(mod){
   (mod.settings||[]).forEach(s=>{
     if(s.kind==='color'){
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="dot" title="Open HSV color picker" data-key="${esc(s.key)}" style="background:${esc(s.value||'#8b5cf6')}"></div></div>`;
-    } else if(s.kind==='keybind'){
-      rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><button type="button" class="m-drop-trigger m-key-capture" data-key="${esc(s.key)}">${esc(s.value||'None')}</button></div>`;
-    } else if(s.kind==='enum'){
+    } else if(s.kind==='keybind' || s.kind==='enum'){
       const opts=(s.variants||[]).map(v=>`<div class="m-drop-option${v===s.value?' selected':''}" data-value="${esc(v)}">${esc(v)}</div>`).join('');
       rows += `<div class="p-row"><span class="p-lbl">${esc(s.label)}</span><div class="m-dropdown" data-key="${esc(s.key)}"><button type="button" class="m-drop-trigger">${esc(s.value)}</button><div class="m-drop-options">${opts}</div></div></div>`;
     } else if(s.kind==='toggle'){
@@ -690,12 +688,6 @@ function markCard(key,on){
   const card=[...grid.querySelectorAll('.mod')].find(el=>el.dataset.key===key);
   if(card) card.classList.toggle('on', on);
 }
-window.__newbaseKeyCaptured=(key,value)=>{
-  const button=mBody.querySelector(`.m-key-capture[data-key="${CSS.escape(key)}"]`);
-  if(button){button.classList.remove('capturing');button.textContent=value;}
-  const setting=openMod&&(openMod.settings||[]).find(s=>s.key===key);
-  if(setting)setting.value=value;
-};
 
 const colorPicker=document.getElementById('colorPicker'),colorWheel=document.getElementById('colorWheel');
 const colorCtx=colorWheel.getContext('2d'),colorCursor=document.getElementById('colorCursor');
@@ -763,14 +755,6 @@ function wireBody(){
       t.classList.toggle('on', on);
       SEND({type:'config', key:t.dataset.key, value:on});
       if(t.dataset.role==='enabled' && openMod){ openMod.enabled=on; markCard(openMod.key,on); }
-    };
-  });
-  mBody.querySelectorAll('.m-key-capture[data-key]').forEach(button=>{
-    button.onclick=e=>{
-      e.stopPropagation();
-      button.textContent='Press a key...';button.classList.add('capturing');
-      button.blur();
-      SEND({type:'keybind_capture',key:button.dataset.key});
     };
   });
   mBody.querySelectorAll('.m-dropdown').forEach(drop=>{

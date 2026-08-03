@@ -94,29 +94,6 @@ fn search_key_input(
     }
 }
 
-fn keybind_name(key: device_query::Keycode) -> Option<&'static str> {
-    use device_query::Keycode::*;
-    Some(match key {
-        A => "A", B => "B", C => "C", D => "D", E => "E", F => "F", G => "G",
-        H => "H", I => "I", J => "J", K => "K", L => "L", M => "M", N => "N",
-        O => "O", P => "P", Q => "Q", R => "R", S => "S", T => "T", U => "U",
-        V => "V", W => "W", X => "X", Y => "Y", Z => "Z",
-        Key0 | Numpad0 => "Num0", Key1 | Numpad1 => "Num1", Key2 | Numpad2 => "Num2",
-        Key3 | Numpad3 => "Num3", Key4 | Numpad4 => "Num4", Key5 | Numpad5 => "Num5",
-        Key6 | Numpad6 => "Num6", Key7 | Numpad7 => "Num7", Key8 | Numpad8 => "Num8",
-        Key9 | Numpad9 => "Num9",
-        F1 => "F1", F2 => "F2", F3 => "F3", F4 => "F4", F5 => "F5", F6 => "F6",
-        F7 => "F7", F8 => "F8", F9 => "F9", F10 => "F10", F11 => "F11", F12 => "F12",
-        Up => "Up", Down => "Down", Left => "Left", Right => "Right", Space => "Space",
-        Enter | NumpadEnter => "Enter", Tab => "Tab", Escape => "Escape",
-        Backspace => "Backspace", Insert => "Insert", Delete => "Delete", Home => "Home",
-        End => "End", PageUp => "PageUp", PageDown => "PageDown",
-        LShift => "LeftShift", RShift => "RightShift", LControl => "LeftControl",
-        RControl => "RightControl", LAlt => "LeftAlt", RAlt => "RightAlt",
-        _ => return None,
-    })
-}
-
 /// Runs before any page-owned JavaScript, so navigation and parse failures can
 /// still reach the native log even when the generated menu script never starts.
 const WEBVIEW_DIAGNOSTICS_SCRIPT: &str = r#"
@@ -555,13 +532,10 @@ impl<S: 'static + Send + Sync> crate::App<S> {
         let mut web_menu_visible = false;
         let mut last_log_push = Instant::now();
         let mut search_focused = false;
-        let mut keybind_capture: Option<String> = None;
-        let mut keybind_capture_armed = false;
         let mut fps_display_enabled = true;
         let mut fps_histogram_enabled = false;
         let mut fps_history = VecDeque::with_capacity(80);
         let mut previous_keys = HashSet::new();
-        let mut previous_mouse_buttons = Vec::new();
         const LOG_PUSH_INTERVAL: Duration = Duration::from_millis(500);
 
         loop {
@@ -596,10 +570,6 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                         search_focused = focused;
                         previous_keys.clear();
                     }
-                    Ok(crate::app::web_menu::MenuCommand::CaptureKeybind(key)) => {
-                        keybind_capture = Some(key);
-                        keybind_capture_armed = false;
-                    }
                     Ok(crate::app::web_menu::MenuCommand::SetFpsDisplay(enabled)) => {
                         fps_display_enabled = enabled;
                     }
@@ -628,39 +598,6 @@ impl<S: 'static + Send + Sync> crate::App<S> {
             }
 
             let current_keys: HashSet<_> = self.device_state.get_keys().into_iter().collect();
-            let current_mouse_buttons = self.device_state.get_mouse().button_pressed;
-            if keybind_capture.is_some() && !keybind_capture_armed {
-                keybind_capture_armed = true;
-            } else if let Some(config_key) = keybind_capture.as_ref() {
-                let keyboard_value = current_keys
-                    .difference(&previous_keys)
-                    .find_map(|key| keybind_name(*key));
-                let mouse_value = current_mouse_buttons
-                    .iter()
-                    .enumerate()
-                    .find(|(index, down)| **down && !previous_mouse_buttons.get(*index).copied().unwrap_or(false))
-                    .and_then(|(index, _)| match index {
-                        1 => Some("MouseLeft"),
-                        2 => Some("MouseRight"),
-                        3 => Some("MouseMiddle"),
-                        4 => Some("Mouse4"),
-                        5 => Some("Mouse5"),
-                        _ => None,
-                    });
-                if let Some(value) = keyboard_value.or(mouse_value) {
-                    if let Err(error) = self.config_store.write().set_string(config_key, value.to_owned()) {
-                        log::warn!("Failed to set captured keybind '{config_key}': {error}");
-                    } else {
-                        let key_json = serde_json::to_string(config_key).unwrap_or_default();
-                        let value_json = serde_json::to_string(value).unwrap_or_default();
-                        overlay.eval(&format!(
-                            "window.__newbaseKeyCaptured && window.__newbaseKeyCaptured({key_json},{value_json});"
-                        ));
-                    }
-                    keybind_capture = None;
-                    keybind_capture_armed = false;
-                }
-            }
             if current_keys
                 .contains(&device_query::Keycode::Insert)
                 && self.show_time.elapsed().as_millis() > 250
@@ -683,7 +620,6 @@ impl<S: 'static + Send + Sync> crate::App<S> {
                     }
                 }
             }
-            previous_mouse_buttons = current_mouse_buttons;
             previous_keys = current_keys;
 
             // Set window size to match game window size (x axis+1 to avoid glfw passthrough blackout bug)
